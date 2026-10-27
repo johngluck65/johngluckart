@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Neural Dynamics Generator — Fabricator Option</title>
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a1a;
+    color: #e8e8e0;
+    font-family: 'Georgia', serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    min-height: 100vh;
+    gap: 20px;
+  }
+  h1 { font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; color: #888; font-weight: normal; }
+  #c { border-radius: 6px; display: block; max-width: 100%; cursor: crosshair; }
+  .panel {
+    background: #242424;
+    border-radius: 10px;
+    padding: 18px 20px;
+    width: 640px;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .ctrl { display: flex; align-items: center; gap: 12px; }
+  .ctrl label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #888; width: 148px; flex-shrink: 0; }
+  .ctrl input[type=range] { flex: 1; accent-color: #F5C800; }
+  .ctrl span { font-size: 13px; font-weight: bold; color: #F5C800; min-width: 30px; text-align: right; }
+  .ctrl select {
+    flex: 1; background: #333; color: #e8e8e0; border: 1px solid #444;
+    border-radius: 4px; padding: 4px 8px; font-size: 13px;
+  }
+  .section-label {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #555; margin-top: 4px;
+  }
+  .divider { border: none; border-top: 1px solid #2e2e2e; margin: 2px 0; }
+  .btn-row { display: flex; gap: 10px; }
+  button {
+    flex: 1; padding: 10px 0; border: none; border-radius: 6px;
+    font-size: 13px; letter-spacing: 0.05em; cursor: pointer; font-family: inherit;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.85; }
+  #btn_gen { background: #F5C800; color: #1a1a1a; font-weight: bold; }
+  #btn_svg { background: #333; color: #e8e8e0; }
+  #btn_fullscreen { background:#333; color:#eee; padding:9px 14px; margin:0 0 10px; }
+  #c:fullscreen { width:100vw !important; height:100vh !important; max-width:100vw; object-fit:contain; background:#fff; border-radius:0; cursor:default; }
+  .note { font-size: 11px; color: #555; text-align: center; letter-spacing: 0.04em; }
+</style>
+</head>
+<body>
+<h1>Neural Dynamics Generator · Fabricator Option</h1>
+<button id="btn_fullscreen" type="button">⛶ Full size view</button>
+<canvas id="c" width="2200" height="1500"></canvas>
+
+<div class="panel">
+  <p class="section-label">fixed material sheet · 22 × 15 in</p>
+  <div class="ctrl"><label>minimum mat size</label><select id="s_frame"></select></div>
+  <p class="note" id="layout_info">The visible art opening is set by the selected mat size.</p>
+  <hr class="divider">
+  <p class="section-label">variable-density cellular field</p>
+  <div class="ctrl"><label>distribution style</label><select id="s_layout"><option value="field" selected>density field</option><option value="bumps">rounded bumps</option><option value="curves">meandering curves</option></select></div>
+  <div class="ctrl"><label>cell count</label><input type="range" id="s_count" min="90" max="420" value="230" step="1"><span id="v_count">230</span></div>
+  <div class="ctrl"><label>breakup</label><input type="range" id="s_breakup" min="0" max="80" value="0" step="1"><span id="v_breakup">0</span></div>
+  <div class="ctrl"><label>size hierarchy</label><input type="range" id="s_hierarchy" min="0" max="100" value="35"><span id="v_hierarchy">35</span></div>
+  <p class="note">Adds broad, smooth changes in cell size across the whole panel. Attractors create separate, localized dense regions.</p>
+  <div class="ctrl"><label>boundary softness</label><input type="range" id="s_softness" min="0" max="100" value="60"><span id="v_softness">60</span></div>
+  <div class="ctrl"><label>contour character</label><input type="range" id="s_contour" min="0" max="100" value="25"><span id="v_contour">25</span></div>
+  <div class="ctrl"><label>base seed</label><input type="number" id="s_seed" min="0" max="99999999" value="18427" step="1"><span></span></div>
+  <p class="note">Each panel gets a different repeatable pattern derived from this seed.</p>
+  <hr class="divider">
+  <p class="section-label">localized density attractor</p>
+  <div class="ctrl"><label>attractor count</label><select id="s_attractors"><option value="0">none</option><option value="1" selected>one</option><option value="2">two</option><option value="3">three</option></select></div>
+  <div class="ctrl"><label>horizontal position</label><input type="range" id="s_ax" min="10" max="90" value="68"><span id="v_ax">68</span></div>
+  <div class="ctrl"><label>vertical position</label><input type="range" id="s_ay" min="10" max="90" value="37"><span id="v_ay">37</span></div>
+  <div class="ctrl"><label>density strength</label><input type="range" id="s_strength" min="1" max="10" value="7"><span id="v_strength">7</span></div>
+  <div class="ctrl"><label>transition spread</label><input type="range" id="s_spread" min="6" max="35" value="19"><span id="v_spread">19</span></div>
+  <hr class="divider">
+  <p class="section-label">cell geometry</p>
+  <div class="btn-row"><button id="btn_gen">↻ regenerate</button><button id="btn_svg">⬇ Fabricator SVG</button></div>
+  <p class="note">Preview shows the artwork centered in the mat border. Fabricator SVG uses red 0.025 mm cut paths at the selected standard frame size, with 0.75 mm clearance around the artwork.</p>
+</div>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W=600, H=600, PPI=100;
+let panelWIn=6, panelHIn=6, artWIn=4, artHIn=4;
+const stockWIn=22, stockHIn=15;
+let sheetW=2200, sheetH=1500, packCols=3, packRows=2, packXIn=2, packYIn=1.5;
+const FRAME_SIZES=[[6,6],[6,8],[8,8],[8,10],[8,12],[10,10],[10,12],[10,14],[11,14],[12,12],[12,14],[14,12],[14,14],[16,12],[16,14],[18,14],[20,14]];
+const EDGE_CLEARANCE_MM=0.75;
+const MIN_MAT_BORDER_IN=1;
+const WEB_WIDTH_MM=1.5;
+const GUIDE_HOLE_DIAMETER_IN=0.125, GUIDE_HOLE_OFFSET_IN=0.25;
+function mmToPx(mm) { return mm * PPI / 25.4; }
+function borderPxX() { return ((panelWIn-artWIn)/2)*PPI + mmToPx(EDGE_CLEARANCE_MM); }
+function borderPxY() { return ((panelHIn-artHIn)/2)*PPI + mmToPx(EDGE_CLEARANCE_MM); }
+function panelLayout() {
+  const margin=0.125;
+  const cols=Math.floor((stockWIn-margin*2)/panelWIn), rows=Math.floor((stockHIn-margin*2)/panelHIn);
+  const usedW=cols*panelWIn, usedH=rows*panelHIn;
+  packCols=cols; packRows=rows; packXIn=(stockWIn-usedW)/2; packYIn=(stockHIn-usedH)/2;
+  return Array.from({length:cols*rows},(_,i)=>({x:packXIn+(i%cols)*panelWIn,y:packYIn+Math.floor(i/cols)*panelHIn}));
+}
+function updateFabricationLayout() {
+  const frameSelect=document.getElementById('s_frame');
+  if(!frameSelect.options.length) FRAME_SIZES.forEach(([fw,fh])=>{const option=document.createElement('option');option.value=`${fw}x${fh}`;option.textContent=`${fw} × ${fh} in`;frameSelect.appendChild(option);});
+  [panelWIn,panelHIn]=frameSelect.value.split('x').map(Number);
+  artWIn=panelWIn-2*MIN_MAT_BORDER_IN;
+  artHIn=panelHIn-2*MIN_MAT_BORDER_IN;
+  W=panelWIn*PPI; H=panelHIn*PPI;
+  sheetW=stockWIn*PPI; sheetH=stockHIn*PPI;
+  canvas.width=sheetW; canvas.height=sheetH;
+  canvas.style.width='min(640px, 100%)'; canvas.style.height='auto';
+  const copies=panelLayout().length;
+  document.getElementById('layout_info').textContent=`${copies} pieces fit on the fixed ${stockWIn} × ${stockHIn} in sheet. Visible art opening: ${artWIn} × ${artHIn} in, with a 1 in mat border on each side; four 1/8 in guide holes per piece.`;
+  generate();
+}
+let seeds = [], polygons = [], panelDesigns = [];
+let rng = Math.random;
+function seedRandom(seed) { let state = (Number(seed) >>> 0) || 1; return () => { state += 0x6D2B79F5; let t = state; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+
+// ── Cell fill options ────────────────────────────────────────────
+const cellFills = {
+  white:       () => 'rgba(255,255,255,0.96)',
+  offwhite:    () => 'rgba(245,238,220,0.96)',
+  black:       () => 'rgba(15,15,15,0.96)',
+  transparent: () => null
+};
+
+// ── Paper gradients ──────────────────────────────────────────────
+const paperGradients = {
+  rainbow:    [[0,'#3B1FA8'],[0.2,'#1a7fd4'],[0.4,'#22b84a'],[0.6,'#F5C800'],[0.8,'#E8620A'],[1,'#C42020']],
+  sunset:     [[0,'#F5E800'],[0.35,'#F5A800'],[0.65,'#E8620A'],[1,'#C42020']],
+  ocean:      [[0,'#2ECFCF'],[0.4,'#1a7fd4'],[0.7,'#2244bb'],[1,'#1a0a6e']],
+  forest:     [[0,'#D4E800'],[0.35,'#4CC800'],[0.65,'#1aA870'],[1,'#0a6e6e']],
+  fire:       [[0,'#F5E020'],[0.3,'#F58000'],[0.6,'#C42020'],[1,'#6B0DAC']],
+  rose:       [[0,'#F5C800'],[0.35,'#E8608A'],[0.65,'#C820A8'],[1,'#7B0A88']],
+  mono_warm:  [[0,'#F5F0E0'],[0.5,'#C8A87A'],[1,'#5C3A1A']],
+  mono_cool:  [[0,'#FFFFFF'],[0.5,'#8899AA'],[1,'#1A2233']]
+};
+
+function makePaperGradient(key) {
+  const stops = paperGradients[key] || paperGradients.rainbow;
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  stops.forEach(([pos, col]) => grad.addColorStop(pos, col));
+  return grad;
+}
+
+function makeSvgGradientDef(key) {
+  const stops = paperGradients[key] || paperGradients.rainbow;
+  const stopStr = stops.map(([pos, col]) =>
+    `<stop offset="${(pos*100).toFixed(0)}%" stop-color="${col}"/>`
+  ).join('');
+  return `<defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">${stopStr}</linearGradient></defs>`;
+}
+
+// ── Seed placement layouts ───────────────────────────────────────
+function generateSeeds() {
+  const count = +document.getElementById('s_count').value;
+  const padX = borderPxX(), padY = borderPxY();
+  const innerW=W-2*padX, innerH=H-2*padY;
+  const ax = padX + innerW * (+document.getElementById('s_ax').value / 100);
+  const ay = padY + innerH * (+document.getElementById('s_ay').value / 100);
+  const spread = Math.min(innerW,innerH) * (+document.getElementById('s_spread').value / 100);
+  const strength = +document.getElementById('s_strength').value;
+  const nAttractors = +document.getElementById('s_attractors').value;
+  const layout = document.getElementById('s_layout').value;
+  const centers = nAttractors > 0 ? [[ax, ay]] : [];
+  if (nAttractors > 1) centers.push([W-ax, H-ay]);
+  if (nAttractors > 2) centers.push([W*.28, H*.72]);
+  const peak = 1 + strength * 2.4;
+  const hierarchy = +document.getElementById('s_hierarchy').value / 100;
+  const contour = +document.getElementById('s_contour').value / 100;
+  const seedKey = (Number(document.getElementById('s_seed').value) >>> 0);
+  const hashNoise = (ix,iy) => {
+    let h = Math.imul(ix ^ seedKey, 374761393) + Math.imul(iy ^ (seedKey >>> 1), 668265263);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 2147483647.5 - 1;
+  };
+  const valueNoise = (x,y) => {
+    const ix=Math.floor(x), iy=Math.floor(y), fx=x-ix, fy=y-iy;
+    const sx=fx*fx*(3-2*fx), sy=fy*fy*(3-2*fy);
+    const a=hashNoise(ix,iy), b=hashNoise(ix+1,iy), c=hashNoise(ix,iy+1), d=hashNoise(ix+1,iy+1);
+    const top=a+(b-a)*sx, bottom=c+(d-c)*sx;
+    return top+(bottom-top)*sy;
+  };
+  const broadVariation = (x,y) => (valueNoise(x/W*3.2,y/H*4.2) + 0.22*valueNoise(x/W*6.4+19,y/H*8.4+7)) / 1.22;
+  let layoutPeaks=[];
+  if(layout==='bumps') {
+    const bumpCount=Math.max(4,Math.min(10,Math.round(Math.sqrt(count)/1.8)));
+    const cols=Math.ceil(Math.sqrt(bumpCount*innerW/innerH)), rows=Math.ceil(bumpCount/cols);
+    for(let i=0;i<bumpCount;i++){
+      const col=i%cols,row=Math.floor(i/cols),cw=innerW/cols,ch=innerH/rows;
+      layoutPeaks.push([padX+(col+.5)*cw+(rng()-.5)*cw*.22,padY+(row+.5)*ch+(rng()-.5)*ch*.22]);
+    }
+  }
+  const curveCount=layout==='curves'?4:0;
+  const curves=Array.from({length:curveCount},(_,i)=>({
+    horizontal:i%2===0,
+    offset:(Math.floor(i/2)+.5)/Math.ceil(curveCount/2),
+    phase:rng()*Math.PI*2,
+    phase2:rng()*Math.PI*2,
+    amplitude:Math.min(innerW,innerH)*(.045+rng()*.025),
+    sigma:Math.min(innerW,innerH)*.065
+  }));
+  const layoutInfluence=(x,y)=>{
+    if(layout==='bumps'){
+      let g=0;const sigma=Math.min(innerW,innerH)*.085;
+      for(const [cx,cy] of layoutPeaks)g=Math.max(g,Math.exp(-((x-cx)**2+(y-cy)**2)/(2*sigma*sigma)));
+      return 1+3.5*g;
+    }
+    if(layout==='curves'){
+      let g=0;
+      for(const c of curves){
+        const t=c.horizontal?(x-padX)/innerW:(y-padY)/innerH;
+        const wave=Math.sin(t*Math.PI*2*1.25+c.phase)*c.amplitude+Math.sin(t*Math.PI*4+c.phase2)*c.amplitude*.35;
+        const offset=c.horizontal?padY+c.offset*innerH:padX+c.offset*innerW;
+        const distance=Math.abs((c.horizontal?y:x)-(offset+wave));
+        g=Math.max(g,Math.exp(-(distance*distance)/(2*c.sigma*c.sigma)));
+      }
+      return 1+3.2*g;
+    }
+    return 1;
+  };
+  const attractorField = (x,y) => {
+    let g = 0;
+    for (const [cx,cy] of centers) g = Math.max(g, Math.exp(-((x-cx)**2+(y-cy)**2)/(2*spread*spread)));
+    return 1 + (peak-1)*g;
+  };
+  const field = (x,y) => (layoutInfluence(x,y) + attractorField(x,y) - 1) * Math.exp(hierarchy * 0.85 * broadVariation(x,y));
+  // Rejection sampling turns the smooth density field into an inhomogeneous
+  // Poisson-like seed set: sparsity remains broad, while spacing contracts
+  // smoothly and strongly near each attractor.
+  seeds = [];
+  const layoutMax=layout==='bumps'?4.5:layout==='curves'?4.2:1;
+  const maxR = (layoutMax + peak - 1) * Math.exp(hierarchy * 0.85);
+  const usableArea=innerW*innerH;
+  const minDistBase = Math.sqrt(usableArea/count) * 0.62;
+  let attempts = 0, maxAttempts = count * 1600;
+  while (seeds.length < count && attempts++ < maxAttempts) {
+    const x = padX + rng()*innerW, y = padY + rng()*innerH;
+    const localDensity = field(x,y);
+    if (rng() > localDensity / maxR) continue;
+    const localRadius = minDistBase / Math.sqrt(localDensity);
+    let ok = true;
+    for (let i=0; i<seeds.length; i++) {
+      const other = seeds[i], otherRadius = minDistBase / Math.sqrt(field(other[0],other[1]));
+      const d = Math.hypot(x-other[0], y-other[1]);
+      if (d < (localRadius+otherRadius)*0.49) { ok=false; break; }
+    }
+    if (ok) seeds.push([x,y]);
+  }
+  // Deterministic fallback only if an unusually crowded parameter set reaches
+  // the proposal limit; it never adds isolated micro-cells.
+  while (seeds.length < count) {
+    let best=null, bestScore=-1;
+    for (let k=0;k<180;k++) {
+      const x=padX+rng()*innerW, y=padY+rng()*innerH;
+      let nearest=Infinity;
+      for (const q of seeds) nearest=Math.min(nearest,Math.hypot(x-q[0],y-q[1]));
+      const score=nearest*Math.sqrt(field(x,y));
+      if(score>bestScore){bestScore=score;best=[x,y];}
+    }
+    seeds.push(best);
+  }
+  // Small, bounded seed displacement changes contour character while keeping
+  // every pebble comfortably separated and inside the fabricator margin.
+  if(contour>0) {
+    for(const point of seeds) {
+      const localRadius=minDistBase/Math.sqrt(field(point[0],point[1]));
+      const angle=rng()*Math.PI*2, distance=rng()*localRadius*0.24*contour;
+      point[0]=Math.max(padX,Math.min(W-padX,point[0]+Math.cos(angle)*distance));
+      point[1]=Math.max(padY,Math.min(H-padY,point[1]+Math.sin(angle)*distance));
+    }
+  }
+  // Break up only oversized cells. Every added seed is placed inside the
+  // largest eligible cell, away from existing seeds, then the diagram is
+  // recomputed so the split remains a clean, non-overlapping tessellation.
+  const breakup=+document.getElementById('s_breakup').value;
+  if(breakup>0) {
+    const minSplitArea=(usableArea/count)*1.25;
+    const inside=(pt,poly)=>{
+      let c=false;
+      for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+        const a=poly[i],b=poly[j];
+        if(((a[1]>pt[1])!==(b[1]>pt[1])) && pt[0]<(b[0]-a[0])*(pt[1]-a[1])/(b[1]-a[1])+a[0]) c=!c;
+      }
+      return c;
+    };
+    for(let added=0;added<breakup;added++) {
+      computeVoronoi();
+      let chosen=-1, largest=minSplitArea;
+      for(let i=0;i<polygons.length;i++) if(polygons[i]) {
+        const area=polyArea(polygons[i]);
+        if(area>largest){largest=area;chosen=i;}
+      }
+      if(chosen<0) break;
+      const poly=polygons[chosen];
+      const xs=poly.map(p=>p[0]), ys=poly.map(p=>p[1]);
+      const cx=poly.reduce((s,p)=>s+p[0],0)/poly.length, cy=poly.reduce((s,p)=>s+p[1],0)/poly.length;
+      let best=[cx,cy], bestDist=-1;
+      for(let k=0;k<72;k++) {
+        const candidate=k===0?[cx,cy]:[Math.min(...xs)+rng()*(Math.max(...xs)-Math.min(...xs)),Math.min(...ys)+rng()*(Math.max(...ys)-Math.min(...ys))];
+        if(!inside(candidate,poly)) continue;
+        let nearest=Infinity;
+        for(const seed of seeds) nearest=Math.min(nearest,Math.hypot(candidate[0]-seed[0],candidate[1]-seed[1]));
+        if(nearest>bestDist){bestDist=nearest;best=candidate;}
+      }
+      seeds.push(best);
+    }
+  }
+}
+function polyArea(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x1,y1] = pts[i], [x2,y2] = pts[(i+1)%pts.length];
+    a += x1*y2 - x2*y1;
+  }
+  return Math.abs(a) / 2;
+}
+
+function computeVoronoi() {
+  const bx=borderPxX(), by=borderPxY(), bounds=[bx,by,W-bx,H-by];
+  // Clip each canvas rectangle against the perpendicular bisector for every
+  // other seed. This is a compact native Voronoi implementation with no CDN.
+  polygons=seeds.map((p,i)=>{
+    let poly=[[bounds[0],bounds[1]],[bounds[2],bounds[1]],[bounds[2],bounds[3]],[bounds[0],bounds[3]]];
+    for(let j=0;j<seeds.length && poly.length;j++){
+      if(i===j) continue;
+      const q=seeds[j], nx=q[0]-p[0], ny=q[1]-p[1];
+      const limit=(q[0]*q[0]+q[1]*q[1]-p[0]*p[0]-p[1]*p[1])*0.5;
+      const out=[];
+      for(let k=0;k<poly.length;k++){
+        const a=poly[k], c=poly[(k+1)%poly.length];
+        const da=nx*a[0]+ny*a[1]-limit, dc=nx*c[0]+ny*c[1]-limit;
+        const ina=da<=1e-8, inc=dc<=1e-8;
+        if(ina) out.push(a);
+        if(ina!==inc){ const t=da/(da-dc); out.push([a[0]+t*(c[0]-a[0]),a[1]+t*(c[1]-a[1])]); }
+      }
+      poly=out;
+    }
+    return poly.length>=3 && polyArea(poly)>(W*H/seeds.length)*0.001 ? poly : null;
+  });
+}
+
+// ── Polygon operations ───────────────────────────────────────────
+function shrinkPoly(pts, factor) {
+  const cx = pts.reduce((s,p)=>s+p[0],0)/pts.length;
+  const cy = pts.reduce((s,p)=>s+p[1],0)/pts.length;
+  return pts.map(([x,y])=>[cx+(x-cx)*factor, cy+(y-cy)*factor]);
+}
+
+// Corner fillet: target-radius based, not a flat edge fraction. A flat
+// fraction (the previous version) caps every corner's cut at the same
+// percentage of its edges regardless of angle — but the same cut fraction
+// produces a much smaller VISUAL radius on an acute corner than an obtuse
+// one, which is why sharp Voronoi vertices (3 cells meeting at a narrow
+// angle) still looked pointed even at max roundness. Instead: each vertex
+// requests a tangent length d = R / tan(angle/2) for a shared target
+// radius R — acute angles legitimately need more edge length for the same
+// visual roundness. Where two corners' requests exceed their shared edge,
+// scale both down proportionally, which naturally lets an acute corner
+// claim most of an edge from a neighbor that barely needed its share.
+function angleAt(prev, cur, next) {
+  const v1x = prev[0]-cur[0], v1y = prev[1]-cur[1];
+  const v2x = next[0]-cur[0], v2y = next[1]-cur[1];
+  const dot = v1x*v2x + v1y*v2y;
+  const cross = v1x*v2y - v1y*v2x;
+  return Math.atan2(Math.abs(cross), dot);
+}
+
+// Weld near-zero-length edges before rounding. Lloyd relaxation pushes
+// seeds toward even spacing, which occasionally makes 4+ points nearly
+// cocircular — two Voronoi vertices end up almost coincident, joined by a
+// near-zero edge, and read visually as an X/star junction rather than a
+// normal rounded corner. Merging that tiny edge's endpoints into one
+// vertex before roundCorners runs turns it back into a single ordinary
+// corner instead of two corners with no room between them.
+function weldShortEdges(pts, threshold = 0.08) {
+  if (pts.length <= 3) return pts;
+  let totalLen = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i], b = pts[(i+1)%pts.length];
+    totalLen += Math.hypot(b[0]-a[0], b[1]-a[1]);
+  }
+  const minLen = (totalLen/pts.length) * threshold;
+  const out = [];
+  let skipNext = false;
+  for (let i = 0; i < pts.length; i++) {
+    if (skipNext) { skipNext = false; continue; }
+    const a = pts[i], b = pts[(i+1)%pts.length];
+    const L = Math.hypot(b[0]-a[0], b[1]-a[1]);
+    if (L < minLen && out.length + (pts.length - i - 1) > 2) {
+      out.push([(a[0]+b[0])/2, (a[1]+b[1])/2]);
+      skipNext = true;
+    } else {
+      out.push(a);
+    }
+  }
+  return out.length >= 3 ? out : pts;
+}
+
+function roundCorners(pts, roundness, segs = 8) {
+  if (roundness <= 0) return pts;
+  const n = pts.length;
+  const lens = [];
+  let totalLen = 0;
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i+1)%n];
+    const L = Math.hypot(b[0]-a[0], b[1]-a[1]);
+    lens.push(L); totalLen += L;
+  }
+  const avgEdge = totalLen / n;
+  const R = roundness * avgEdge * 0.5;
+
+  const desired = [];
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i-1+n)%n], cur = pts[i], next = pts[(i+1)%n];
+    const theta = angleAt(prev, cur, next);
+    const halfTan = Math.tan(theta/2);
+    desired.push(halfTan > 1e-4 ? R / halfTan : lens[i]*0.49);
+  }
+
+  const allocNext = new Array(n).fill(0), allocPrev = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    const j = (i+1)%n;
+    let a = desired[i], b = desired[j];
+    const edgeLen = lens[i], sum = a+b;
+    if (sum > edgeLen && sum > 0) { const scale = edgeLen/sum; a *= scale; b *= scale; }
+    allocNext[i] = a; allocPrev[j] = b;
+  }
+  const finalD = [];
+  for (let i = 0; i < n; i++) finalD.push(Math.min(allocPrev[i], allocNext[i]));
+
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const prev = pts[(i-1+n)%n], cur = pts[i], next = pts[(i+1)%n];
+    const d = finalD[i];
+    if (d <= 1e-6) { out.push(cur); continue; }
+    const fPrev = d/lens[(i-1+n)%n], fNext = d/lens[i];
+    const p0 = [cur[0]+(prev[0]-cur[0])*fPrev, cur[1]+(prev[1]-cur[1])*fPrev];
+    const p2 = [cur[0]+(next[0]-cur[0])*fNext, cur[1]+(next[1]-cur[1])*fNext];
+    // A curve controlled by the original vertex still reads as pointed on
+    // acute angles even with full edge budget, because it's inscribed —
+    // it can only approach cur, never truncate past it. For vertices that
+    // got rationed in the negotiation above (the acute ones), blend the
+    // control point toward the p0-p2 chord midpoint instead: a blunter,
+    // deliberately truncated cut rather than one that chases the original
+    // sharp direction. Well-served (obtuse) corners are untouched.
+    const starved = desired[i] > 1e-6 ? Math.max(0, Math.min(1, 1 - d/desired[i])) : 0;
+    const mid = [(p0[0]+p2[0])/2, (p0[1]+p2[1])/2];
+    const blend = 1 - starved * 0.8;
+    const ctrl = [mid[0]+(cur[0]-mid[0])*blend, mid[1]+(cur[1]-mid[1])*blend];
+    for (let s = 0; s <= segs; s++) {
+      const u = s/segs, v = 1-u;
+      out.push([v*v*p0[0]+2*v*u*ctrl[0]+u*u*p2[0], v*v*p0[1]+2*v*u*ctrl[1]+u*u*p2[1]]);
+    }
+  }
+  return out;
+}
+
+function drawPoly(pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+}
+
+function polyToSvgD(pts) {
+  let d = `M${pts[0][0].toFixed(4)},${pts[0][1].toFixed(4)}`;
+  for (let i = 1; i < pts.length; i++) d += `L${pts[i][0].toFixed(4)},${pts[i][1].toFixed(4)}`;
+  return d + 'Z';
+}
+
+// ── Compute per-cell shrink with gradient + wave ─────────────────
+// packBias (0-1, from the "packing" slider) pulls the whole shrink range
+// toward 1.0 (no gap) — this is what lets cells get rounder (more chaikin
+// iterations) without drifting apart, since roundness and gap are now
+// controlled by separate sliders instead of one shared shrink factor.
+function cellShrink(sx, sy, shrinkBase, gradient, wave, wavescale, packBias) {
+  const t = Math.sqrt((sx-W/2)**2+(sy-H/2)**2) / Math.sqrt((W/2)**2+(H/2)**2);
+  let s = shrinkBase - gradient * t * 0.18;
+  if (wave > 0) {
+    const dist = Math.sqrt((sx-W/2)**2+(sy-H/2)**2);
+    const wavelength = 400 / (1 + (wavescale - 1) * 0.78);
+    const ripple = Math.sin((dist / wavelength) * Math.PI * 2);
+    s += wave * ripple * 0.22;
+  }
+  s = Math.max(0.55, Math.min(0.985, s));
+  // Blend toward 1.0 (edge-to-edge) as packBias rises, so higher packing
+  // always tightens the gap regardless of gradient/wave settings.
+  return Math.min(0.995, s + (1 - s) * packBias);
+}
+
+// Keep every closed opening measurably inside its own convex Voronoi cell.
+// The adaptive cap guarantees a 0.1 canvas-unit inset even when jitter,
+// gradient, or wave controls request near-edge-to-edge packing. The same
+// resulting polygon is used by both previews and SVG export.
+function safeCellShape(i, roundness, sourcePolygons=polygons) {
+  const pts=sourcePolygons[i]; if(!pts || pts.length<3) return null;
+  const webWidth=mmToPx(WEB_WIDTH_MM);
+  const halfWeb=webWidth/2;
+  const cx=pts.reduce((sum,p)=>sum+p[0],0)/pts.length;
+  const cy=pts.reduce((sum,p)=>sum+p[1],0)/pts.length;
+  let minInset=Infinity;
+  for(let j=0;j<pts.length;j++){
+    const a=pts[j],b=pts[(j+1)%pts.length],len=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    if(len<1e-9) continue;
+    minInset=Math.min(minInset,Math.abs((b[0]-a[0])*(cy-a[1])-(b[1]-a[1])*(cx-a[0]))/len);
+  }
+  if(!Number.isFinite(minInset)||minInset<=halfWeb) return null;
+  const scale=1-halfWeb/minInset;
+  if(scale<=0) return null;
+  return roundCorners(weldShortEdges(shrinkPoly(pts,scale)),roundness);
+}
+
+// ── Generate & draw ──────────────────────────────────────────────
+function generate() {
+  const baseSeed=Number(document.getElementById('s_seed').value)>>>0;
+  const positions=panelLayout();
+  panelDesigns=positions.map((_,index)=>{
+    // Each panel gets a stable, reproducible stream derived from the entered seed.
+    rng=seedRandom((baseSeed + Math.imul(index,0x9E3779B9))>>>0);
+    generateSeeds();
+    computeVoronoi();
+    return {seeds,polygons};
+  });
+  if(panelDesigns.length){seeds=panelDesigns[0].seeds;polygons=panelDesigns[0].polygons;}
+  draw();
+}
+
+function drawPanelPreview(x,y,design) {
+  ctx.save(); ctx.translate(x*PPI,y*PPI);
+  // White panel stock with a visible outer border; artwork occupies the inner area.
+  ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,W,H);
+  const bx=borderPxX(), by=borderPxY();
+  ctx.save(); ctx.beginPath(); ctx.rect(bx,by,W-2*bx,H-2*by); ctx.clip();
+  ctx.fillStyle=makePaperGradient('rainbow'); ctx.fillRect(bx,by,W-2*bx,H-2*by); ctx.restore();
+  const holeR=GUIDE_HOLE_DIAMETER_IN*PPI/2, holeO=GUIDE_HOLE_OFFSET_IN*PPI;
+  ctx.fillStyle='#000';
+  for(const [hx,hy] of [[holeO,holeO],[W-holeO,holeO],[holeO,H-holeO],[W-holeO,H-holeO]]) { ctx.beginPath();ctx.arc(hx,hy,holeR,0,Math.PI*2);ctx.fill(); }
+  for(let i=0;i<design.polygons.length;i++){
+    const shape=safeCellShape(i,+document.getElementById('s_softness').value/100,design.polygons); if(!shape) continue;
+    drawPoly(shape);ctx.fillStyle='#000000';ctx.fill();
+  }
+  ctx.strokeStyle='#444';ctx.lineWidth=1;ctx.strokeRect(0,0,W,H);
+  ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0,0,sheetW,sheetH);ctx.fillStyle='#fff';ctx.fillRect(0,0,sheetW,sheetH);
+  panelLayout().forEach((pos,i)=>drawPanelPreview(pos.x,pos.y,panelDesigns[i]||{polygons}));
+}
+
+function buildSvg() {
+  const roundness=+document.getElementById('s_softness').value/100;
+  const positions=panelLayout();
+  let paths='';
+  if(positions.length){
+    const x0=packXIn*PPI,y0=packYIn*PPI,x1=x0+packCols*W,y1=y0+packRows*H;
+    paths+=`<path d="M${x0},${y0}H${x1}V${y1}H${x0}Z" fill="none" stroke="#ff0000" stroke-width="0.025mm"/>`;
+    for(let c=1;c<packCols;c++){const x=x0+c*W;paths+=`<path d="M${x},${y0}V${y1}" fill="none" stroke="#ff0000" stroke-width="0.025mm"/>`;}
+    for(let r=1;r<packRows;r++){const y=y0+r*H;paths+=`<path d="M${x0},${y}H${x1}" fill="none" stroke="#ff0000" stroke-width="0.025mm"/>`;}
+  }
+  const holeR=GUIDE_HOLE_DIAMETER_IN*PPI/2,holeO=GUIDE_HOLE_OFFSET_IN*PPI;
+  for(let panelIndex=0;panelIndex<positions.length;panelIndex++){
+    const pos=positions[panelIndex], design=panelDesigns[panelIndex]||{polygons};
+    const ox=pos.x*PPI,oy=pos.y*PPI;
+    for(const [hx,hy] of [[holeO,holeO],[W-holeO,holeO],[holeO,H-holeO],[W-holeO,H-holeO]]) paths+=`<circle cx="${ox+hx}" cy="${oy+hy}" r="${holeR}" fill="none" stroke="#ff0000" stroke-width="0.025mm"/>`;
+    for(let i=0;i<design.polygons.length;i++){
+      const shape=safeCellShape(i,roundness,design.polygons);if(!shape)continue;
+      const d=polyToSvgD(shape).replace(/([ML])(-?[0-9.]+),(-?[0-9.]+)/g,(_,cmd,x,y)=>`${cmd}${(+x+ox).toFixed(4)},${(+y+oy).toFixed(4)}`);
+      paths+=`<path d="${d}" fill="none" stroke="#ff0000" stroke-width="0.025mm"/>`;
+    }
+  }
+  const reference=`${stockWIn} × ${stockHIn} in sheet; ${panelWIn} × ${panelHIn} in mats; ${artWIn} × ${artHIn} in visible openings; ${positions.length} copies`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${stockWIn}in" height="${stockHIn}in" viewBox="0 0 ${sheetW} ${sheetH}" data-reference-dimension="${reference}" data-scale="100%"><title>Neural Dynamics Fabricator Sheet</title><desc>Reference size ${reference}. Each mat is ${panelWIn} × ${panelHIn} in, with a 1 in border on every side around the visible opening. Four 0.125 in guide holes per mat, centers 0.25 in from panel corners. Red vector lines are cuts, stroke width 0.025 mm. Shared panel edges are included once. Each artwork is inset 0.75 mm from its visible boundary. The preview's color fills are omitted.</desc>${paths}</svg>`;
+}
+
+// ── Wiring ───────────────────────────────────────────────────────
+document.getElementById('btn_gen').onclick = generate;
+// Fixed 22 × 15 in stock; the selected mat size determines the visible opening.
+const frameSelect=document.getElementById('s_frame');
+frameSelect.onchange=updateFabricationLayout;
+const fullscreenButton=document.getElementById('btn_fullscreen');
+fullscreenButton.onclick=async()=>{if(document.fullscreenElement===canvas) await document.exitFullscreen(); else if(canvas.requestFullscreen) await canvas.requestFullscreen();};
+document.addEventListener('fullscreenchange',()=>{fullscreenButton.textContent=document.fullscreenElement===canvas?'Exit full size view (Esc)':'⛶ Full size view';});
+
+// Geometry controls rebuild the deterministic point field.
+['s_layout','s_count','s_breakup','s_hierarchy','s_contour','s_softness','s_seed','s_attractors','s_ax','s_ay','s_strength','s_spread'].forEach(id => {
+  const el = document.getElementById(id);
+  const value = document.getElementById('v_'+id.slice(2));
+  el.oninput = () => { if(value) value.textContent = el.value; generate(); };
+  el.onchange = () => { if(value) value.textContent = el.value; generate(); };
+});
+function updateAttractorControls() {
+  const hasAttractor=+document.getElementById('s_attractors').value>0;
+  ['s_ax','s_ay','s_strength','s_spread'].forEach(id=>{document.getElementById(id).disabled=!hasAttractor;});
+}
+document.getElementById('s_attractors').addEventListener('change',updateAttractorControls);
+updateAttractorControls();
+document.getElementById('btn_svg').onclick = () => {
+  const svg = buildSvg();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+  a.download = 'neural-dynamics-fabricator-sheet.svg'; a.click();
+};
+updateFabricationLayout();
+</script>
+</body>
+</html>

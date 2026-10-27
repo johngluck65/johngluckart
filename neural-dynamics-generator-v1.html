@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Voronoi Web Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a1a;
+    color: #e8e8e0;
+    font-family: 'Georgia', serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+    min-height: 100vh;
+    gap: 20px;
+  }
+  h1 { font-size: 15px; letter-spacing: 0.12em; text-transform: uppercase; color: #888; font-weight: normal; }
+  #c { border-radius: 6px; display: block; max-width: 100%; cursor: crosshair; }
+  #c:fullscreen { width: 100vw !important; height: 100vh !important; max-width: none !important; object-fit: contain; background: #fff; border-radius: 0; cursor: default; }
+  #btn_fullscreen { flex: 0; width: auto; padding: 8px 14px; background: #333; color: #e8e8e0; }
+  #fullscreen_wrap { display: flex; justify-content: center; width: min(640px, 100%); }
+  .panel {
+    background: #242424;
+    border-radius: 10px;
+    padding: 18px 20px;
+    width: 640px;
+    max-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+  }
+  .ctrl { display: flex; align-items: center; gap: 12px; }
+  .ctrl label { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #888; width: 148px; flex-shrink: 0; }
+  .field-name { font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: #888; width: 148px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+  .ctrl input[type=range] { flex: 1; accent-color: #F5C800; }
+  .ctrl span { font-size: 13px; font-weight: bold; color: #F5C800; min-width: 30px; text-align: right; }
+  .ctrl select {
+    flex: 1; background: #333; color: #e8e8e0; border: 1px solid #444;
+    border-radius: 4px; padding: 4px 8px; font-size: 13px;
+  }
+  .section-label {
+    font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: #555; margin-top: 4px;
+  }
+  .divider { border: none; border-top: 1px solid #2e2e2e; margin: 2px 0; }
+  .btn-row { display: flex; gap: 10px; }
+  button {
+    flex: 1; padding: 10px 0; border: none; border-radius: 6px;
+    font-size: 13px; letter-spacing: 0.05em; cursor: pointer; font-family: inherit;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.85; }
+  #btn_svg { background: #333; color: #e8e8e0; }
+  #btn_dl  { background: #333; color: #e8e8e0; }
+  #btn_undo_seed { background: #333; color: #e8e8e0; }
+  #btn_undo_seed:disabled { opacity: .45; cursor: default; }
+  .note { font-size: 11px; color: #555; text-align: center; letter-spacing: 0.04em; }
+  .help-wrap { position: relative; display: inline-flex; flex: 0 0 auto; }
+  .help-trigger { flex: 0 0 20px; width: 20px; height: 20px; padding: 0; border: 1px solid #777; border-radius: 50%; color: #ddd; background: #333; font: 12px/18px Georgia,serif; letter-spacing: 0; }
+  .help-popover { display: none; position: absolute; z-index: 30; top: calc(100% + 7px); left: -70px; width: 320px; max-width: calc(100vw - 32px); padding: 12px 14px; border: 1px solid #555; border-radius: 7px; background: #202020; box-shadow: 0 8px 24px rgba(0,0,0,.45); color: #ddd; font: 12px/1.5 Georgia,serif; letter-spacing: 0; text-transform: none; text-align: left; }
+  .ctrl .help-wrap { min-width: 0; color: inherit; font-weight: normal; text-align: left; }
+  .ctrl .help-popover { min-width: 0; color: #ddd; font-weight: normal; text-align: left; }
+  .help-popover p { margin: 0 0 7px; }
+  .help-popover p:last-child { margin-bottom: 0; }
+  .help-wrap:hover .help-popover, .help-wrap:focus-within .help-popover { display: block; }
+  @media (min-width: 1100px) {
+    body { display: grid; grid-template-columns: minmax(0,1fr) minmax(400px,640px); grid-template-areas: "title title" "full panel" "canvas panel"; align-items: start; justify-items: center; }
+    h1 { grid-area: title; }
+    #fullscreen_wrap { grid-area: full; width: 100%; }
+    #c { grid-area: canvas; width: min(900px,100%) !important; }
+    .panel { grid-area: panel; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<h1>Voronoi Web Generator</h1>
+<div id="fullscreen_wrap"><button id="btn_fullscreen" type="button" aria-label="View preview full screen">⛶ Full screen preview</button></div>
+<canvas id="c" width="2400" height="1800"></canvas>
+
+<div class="panel">
+  <p class="section-label">panel and sheet sizes</p>
+  <div class="ctrl">
+    <div class="field-name">frame / mat / art
+      <span class="help-wrap">
+        <button class="help-trigger" type="button" aria-label="Frame and fabrication details" aria-describedby="fabrication_tip">i</button>
+        <span class="help-popover" id="fabrication_tip" role="tooltip">
+          <p id="layout_info" aria-live="polite"></p>
+          <p id="mat_info" aria-live="polite"></p>
+          <p id="size_details" aria-live="polite"></p>
+          <p id="cost_info" aria-live="polite"></p>
+        </span>
+      </span>
+    </div>
+    <select id="s_opening"></select>
+  </div>
+  <hr class="divider">
+  <p class="section-label">arrangement</p>
+  <div class="ctrl">
+    <label>layout</label>
+    <select id="s_layout">
+      <option value="surface" selected>soft surface warp</option>
+      <option value="bumps">rounded bumps</option>
+      <option value="poisson">poisson disk (even spread)</option>
+      <option value="curves">meandering curves</option>
+      <option value="clusters">organic clusters</option>
+      <option value="random">random scatter</option>
+    </select>
+  </div>
+  <div class="ctrl">
+    <label for="s_seed_contrast">seed size contrast</label>
+    <input type="range" id="s_seed_contrast" min="0" max="80" value="25" step="1">
+    <span id="v_seed_contrast">25%</span>
+  </div>
+  <div class="ctrl">
+    <label for="s_seed_direction">density direction</label>
+    <input type="range" id="s_seed_direction" min="0" max="360" value="0" step="15">
+    <span id="v_seed_direction">0° →</span>
+  </div>
+  <p class="note">Higher contrast places more seeds toward the arrow (smaller cells) and fewer away from it (larger cells).</p>
+  <div class="ctrl" id="poisson_center_x_ctrl" hidden>
+    <label for="s_poisson_x">Poisson center X</label>
+    <input type="range" id="s_poisson_x" min="0" max="100" value="50" step="1" aria-label="Poisson disk center, horizontal position">
+    <span id="v_poisson_x">50%</span>
+  </div>
+  <div class="ctrl" id="poisson_center_y_ctrl" hidden>
+    <label for="s_poisson_y">Poisson center Y</label>
+    <input type="range" id="s_poisson_y" min="0" max="100" value="50" step="1" aria-label="Poisson disk center, vertical position">
+    <span id="v_poisson_y">50%</span>
+  </div>
+  <p class="note" id="poisson_center_note" hidden>The center sets where the even-spaced pattern starts growing. The remaining openings are added one at a time to the largest webs, inside the art area.</p>
+  <div class="ctrl">
+    <label>cells in selected art area</label>
+    <input type="range" id="s_count" min="10" max="3000" value="140" step="1" title="The maximum is recalculated from usable art area, structural border, and cut spacing">
+    <span id="v_count">140</span>
+  </div>
+  <p id="actual_count" class="note" aria-live="polite">Actual cut openings will appear here.</p>
+  <div class="ctrl">
+    <label for="s_web_mode">web thickness wave</label>
+    <select id="s_web_mode">
+      <option value="off">off</option>
+      <option value="radial" selected>radial</option>
+      <option value="linear">linear</option>
+    </select>
+  </div>
+  <div class="ctrl">
+    <label for="s_web_amplitude">wave depth (extra per side)</label>
+    <input type="range" id="s_web_amplitude" min="0" max="1" value="0.25" step="0.05">
+    <span id="v_web_amplitude">0.25 mm</span>
+  </div>
+  <div class="ctrl">
+    <label for="s_wave_count">number of waves</label>
+    <input type="range" id="s_wave_count" min="0" max="4" value="3" step="1">
+    <span id="v_wave_count">3</span>
+  </div>
+  <p class="note">Wave depth only adds material. Each opening keeps at least 0.75 mm on every side (1.5 mm web minimum).</p>
+  <hr class="divider">
+  <p class="section-label">manual seed editing</p>
+  <div class="ctrl">
+    <label for="s_manual_mode">edit mode</label>
+    <select id="s_manual_mode">
+      <option value="off" selected>off</option>
+      <option value="add">add / split</option>
+      <option value="move">move</option>
+      <option value="remove">remove</option>
+    </select>
+  </div>
+  <div class="btn-row"><button id="btn_undo_seed" type="button" disabled>↶ Undo seed edit</button></div>
+  <p id="manual_note" class="note">Choose Add/Split and click an art area, drag a visible seed in Move mode, or click one in Remove mode. Edits apply to the selected panel and are included in the SVG. Changing size, layout, count, or density resets edits.</p>
+  <div class="ctrl"><label>preview</label><select id="s_preview"><option value="normal">Normal preview</option><option value="line">Line Drawing</option></select></div>
+
+  <hr class="divider">
+  <div class="btn-row">
+    <button id="btn_svg">⬇ Fabricator SVG</button>
+    <button id="btn_svg_preview">⬇ Black preview SVG</button>
+  </div>
+  <div class="btn-row"><button id="btn_dl">⬇ HTML</button></div>
+  <p class="note">The black preview SVG is for viewing only. Use Fabricator SVG for cutting.</p>
+  <p class="note">Dimensions are width × height in landscape orientation. The art is centered within each frame-size panel. Panels nest edge-to-edge; shared SVG cut lines are included once.</p>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const fullscreenButton = document.getElementById('btn_fullscreen');
+fullscreenButton.onclick = async () => {
+  if (document.fullscreenElement === canvas) await document.exitFullscreen();
+  else if (canvas.requestFullscreen) await canvas.requestFullscreen();
+};
+document.addEventListener('fullscreenchange', () => {
+  fullscreenButton.textContent = document.fullscreenElement === canvas ? 'Exit full screen (Esc)' : '⛶ Full screen preview';
+});
+let W = 0, H = 0, PPI = 1, designWIn = 0, designHIn = 0, panelWIn = 0, panelHIn = 0, artXIn = 0, artYIn = 0;
+let densityAreaIn2 = 4*4;
+let stockWIn = 22, stockHIn = 15, sheetW = 2400, sheetH = 1800;
+let seeds = [], polygons = [], designs = [], packPositions = [], packedLayout = null;
+let manualSeedOverrides = new Map(), manualUndoStack = [], activeManualPanel = 0, activeSeedDrag = null;
+const SHEETS = {
+  half: {w:22, h:15, label:'half sheet · landscape'},
+  full: {w:30, h:22, label:'full sheet · landscape'}
+};
+const STANDARD_PAPER_SIZES = [
+  {w:7,h:5,label:'pad/block sheet'},
+  {w:6,h:6,label:'pad/block sheet'},
+  {w:10,h:7,label:'pad/block sheet'},
+  {w:11,h:7.5,label:'eighth sheet'},
+  {w:12,h:9,label:'pad/block sheet'},
+  {w:15,h:11,label:'quarter sheet'},
+  {w:20,h:14,label:'pad/block sheet'},
+  {w:20,h:16,label:'pad/block sheet'},
+  {w:22,h:15,label:'half sheet'},
+  {w:30,h:22,label:'full sheet'},
+  {w:60,h:30,label:'double elephant sheet'},
+  {w:51,h:40,label:'watercolor roll cut'}
+].sort((a,b)=>a.w*a.h-b.w*b.h);
+// Rows are normalized to width-first, landscape measurements. Each option
+// preserves the supplied frame, mat-window, and artwork-fit pairing.
+const FRAMING_OPTIONS = [
+  [5,3.5,7,5,4.5,3], [6,4,7,5,5.5,3.5], [4.5,4.5,6,6,4,4], [4,4,8,8,3.5,3.5],
+  [6,4,10,8,5.5,3.5], [7,5,10,8,6.5,4.5], [7,4,10,8,6.5,3.5],
+  [9,6,12,9,8.5,5.5], [5,5,10,10,4.5,4.5], [8,8,10,10,7.5,7.5],
+  [17,7,20,10,16.5,6.5], [7,5,14,11,6.5,4.5], [10,8,14,11,9.5,7.5],
+  [10,7,14,11,9.5,6.5], [12,8,14,11,11.5,7.5], [11,8.5,14,11,10.75,8.25],
+  [9,6,14,11,8.5,5.5], [8,8,12,12,7.5,7.5], [12,8,16,12,11.5,7.5],
+  [12,9,16,12,11.5,8.5], [10.5,8,16,12,10,7.5], [11,8.5,16,12,10.75,8.25],
+  [14,11,18,14,13.5,10.5], [12,8,18,14,11.5,7.5], [12,9,18,14,11.5,8.5],
+  [11,8.5,18,14,10.75,8.25], [12,12,16,16,11.5,11.5], [14,11,20,16,13.5,10.5],
+  [16,12,20,16,15.5,11.5], [11,8.5,20,16,10.5,8], [15,10,20,16,14.5,9.5],
+  [18,12,24,18,17.5,11.5], [17,11,24,18,16.5,10.5], [19,13,24,18,18.5,12.5],
+  [16,16,20,20,15.5,15.5], [20,16,24,20,19.5,15.5],
+  [24,18,28,22,23.5,17.5], [22,17,28,22,21.5,16.5], [24,16,28,22,23.5,15.5],
+  [24,20,30,24,23.5,19.5], [24,18,30,24,23.5,17.5], [24,16,30,24,23.5,15.5],
+  [32,24,40,32,31.5,23.5]
+].map(([artW,artH,frameW,frameH,windowW,windowH])=>({
+  artW,artH,frameW,frameH,windowW,windowH,
+  customFrame:false
+}));
+const framingSelect=document.getElementById('s_opening');
+FRAMING_OPTIONS.forEach((option,index)=>{
+  const item=document.createElement('option');
+  item.value=String(index);
+  item.textContent=`Frame ${option.frameW} × ${option.frameH}${option.customFrame?' (custom)':''} · mat ${option.windowW} × ${option.windowH} · art ${option.artW} × ${option.artH} in`;
+  framingSelect.appendChild(item);
+});
+framingSelect.value=String(FRAMING_OPTIONS.findIndex(o=>o.artW===4&&o.artH===4));
+const MIN_WEB_WIDTH_MM = 1.5;
+const MIN_OPENING_WIDTH_MM = 6;
+const MIN_CUT_INSET_PER_SIDE_MM = MIN_WEB_WIDTH_MM / 2;
+const MAX_CELL_COUNT = 3000;
+const GUIDE_HOLE_DIAMETER_IN = 0.125;
+const GUIDE_HOLE_OFFSET_IN = 0.25;
+const SIZE_GRADIENT = 0;
+const CORNER_ROUNDNESS = 2;
+const OPENING_PACKING = 1;
+const MASTER_PATTERN_SEED = (Math.random()*0x100000000)>>>0;
+const MIN_WEB_JUNCTION_ANGLE = Math.PI/12;
+const MIN_CELL_EDGE_RATIO = 0.025;
+function makeSeededRandom(seed) {
+  let state=seed>>>0;
+  return function() {
+    state=(state+0x6D2B79F5)>>>0;
+    let value=state;
+    value=Math.imul(value^(value>>>15),value|1);
+    value^=value+Math.imul(value^(value>>>7),value|61);
+    return ((value^(value>>>14))>>>0)/4294967296;
+  };
+}
+function maxCellsForArtArea(w,h) {
+  const borderIn=Math.min(0.55,Math.max(0.30,Math.min(w,h)*0.08));
+  const usableWmm=Math.max(0,w-borderIn*2)*25.4;
+  const usableHmm=Math.max(0,h-borderIn*2)*25.4;
+  // Each cell must leave a six-millimeter opening plus a one-millimeter
+  // inset on both sides. Bound counts independently by the usable width and
+  // height, so the target reflects the selected art area's actual footprint.
+  const cellFootprintMm=MIN_OPENING_WIDTH_MM+2*MIN_CUT_INSET_PER_SIDE_MM;
+  const across=Math.floor(usableWmm/cellFootprintMm);
+  const down=Math.floor(usableHmm/cellFootprintMm);
+  return Math.max(10,Math.min(MAX_CELL_COUNT,across*down));
+}
+function borderPx() {
+  const designShortSide=Math.min(designWIn,designHIn);
+  const borderIn=Math.min(0.55,Math.max(0.30,designShortSide*0.08));
+  return borderIn*PPI;
+}
+function openingDimensions() {
+  const option=FRAMING_OPTIONS[+document.getElementById('s_opening').value]||FRAMING_OPTIONS[0];
+  return {w:option.artW,h:option.artH};
+}
+function panelDimensions() {
+  const option=FRAMING_OPTIONS[+document.getElementById('s_opening').value]||FRAMING_OPTIONS[0];
+  return {w:option.frameW,h:option.frameH,matW:option.windowW,matH:option.windowH,customFrame:option.customFrame};
+}
+function fitForSheet(pieceW, pieceH, stockW, stockH) {
+  const margin = 0.125, gap = 0;
+  let best = null;
+  for (const rotated of [false]) {
+    const w = pieceW, h = pieceH;
+    const usableW = stockW - margin*2, usableH = stockH - margin*2;
+    const cols = Math.max(0, Math.floor((usableW + gap + 1e-9) / (w + gap)));
+    const rows = Math.max(0, Math.floor((usableH + gap + 1e-9) / (h + gap)));
+    const count = cols * rows;
+    if (!best || count > best.count) best = {rotated,w,h,cols,rows,count};
+  }
+  if (!best || best.count < 1) return {count:0,positions:[]};
+  const totalW = best.cols*best.w + (best.cols-1)*gap;
+  const totalH = best.rows*best.h + (best.rows-1)*gap;
+  const x0 = (stockW-totalW)/2, y0 = (stockH-totalH)/2;
+  const positions=[];
+  for(let row=0;row<best.rows;row++) for(let col=0;col<best.cols;col++)
+    positions.push({x:x0+col*(best.w+gap),y:y0+row*(best.h+gap),rotated:best.rotated});
+  return {...best,positions};
+}
+function smallBedFits(w,h) { return (w<=32&&h<=18)||(w<=18&&h<=32); }
+function selectStock(pieceW,pieceH) {
+  const halfLayout=fitForSheet(pieceW,pieceH,SHEETS.half.w,SHEETS.half.h);
+  const fullLayout=fitForSheet(pieceW,pieceH,SHEETS.full.w,SHEETS.full.h);
+  const targetCount=halfLayout.count||fullLayout.count||1;
+  for(const size of STANDARD_PAPER_SIZES) {
+    const layout=fitForSheet(pieceW,pieceH,size.w,size.h);
+    if(layout.count>=targetCount) return {...size,key:'standard',layout,custom:false};
+  }
+  const fallback=fitForSheet(pieceW,pieceH,SHEETS.full.w,SHEETS.full.h);
+  return {...SHEETS.full,key:'full',layout:fallback,custom:false};
+}
+function prepareLayout() {
+  const opening=openingDimensions();
+  const panel=panelDimensions();
+  panelWIn=panel.w; panelHIn=panel.h;
+  designWIn=opening.w; designHIn=opening.h;
+  const countSlider=document.getElementById('s_count');
+  const cellLimit=maxCellsForArtArea(designWIn,designHIn);
+  countSlider.max=cellLimit;
+  if(+countSlider.value>cellLimit) countSlider.value=cellLimit;
+  document.getElementById('v_count').textContent=countSlider.value;
+  if(designWIn>panelWIn||designHIn>panelHIn){
+    document.getElementById('layout_info').textContent='No standard frame size fits this visible art area.';
+    document.getElementById('mat_info').textContent='Mat and artwork details unavailable.';
+    document.getElementById('size_details').textContent='Minimum paper size unavailable.';
+    document.getElementById('cost_info').textContent='Laser time unavailable.';
+    document.getElementById('btn_svg').disabled=true;
+    packedLayout={count:0,positions:[]}; packPositions=[]; designs=[];
+    return;
+  }
+  artXIn=(panelWIn-designWIn)/2; artYIn=(panelHIn-designHIn)/2;
+  const stock=selectStock(panelWIn,panelHIn);
+  stockWIn=Math.max(stock.w,stock.h); stockHIn=Math.min(stock.w,stock.h);
+  packedLayout=fitForSheet(panelWIn,panelHIn,stockWIn,stockHIn);
+  packPositions=packedLayout.positions;
+  const stockLong=Math.max(stockWIn,stockHIn);
+  PPI=2400/stockLong;
+  W=designWIn*PPI; H=designHIn*PPI;
+  sheetW=Math.round(stockWIn*PPI); sheetH=Math.round(stockHIn*PPI);
+  canvas.width=sheetW; canvas.height=sheetH;
+  canvas.style.width='min(900px, 100%)'; canvas.style.height='auto';
+  document.getElementById('btn_svg').disabled=packedLayout.count===0;
+  document.getElementById('layout_info').textContent=`${panel.customFrame?'Custom':'Standard'} frame size: ${panelWIn} × ${panelHIn} in.`;
+  document.getElementById('mat_info').textContent=`Mat board: ${panelWIn} × ${panelHIn} in${panel.customFrame?' · custom frame/mat combination':''} · window ${panel.matW} × ${panel.matH} in · fits artwork ${designWIn} × ${designHIn} in.`;
+  document.getElementById('size_details').textContent=`Minimum standard paper size: ${stockWIn} × ${stockHIn} in (${stock.label}).`;
+  document.getElementById('cost_info').textContent='Estimated laser time will appear after the cut pattern is generated.';
+}
+
+// ── Cell fill options ────────────────────────────────────────────
+const cellFills = {
+  white:       () => 'rgba(255,255,255,0.96)',
+  offwhite:    () => 'rgba(245,238,220,0.96)',
+  black:       () => 'rgba(0,0,0,1)',
+  transparent: () => null
+};
+
+// ── Paper gradients ──────────────────────────────────────────────
+const paperGradients = {
+  rainbow:    [[0,'#3B1FA8'],[0.2,'#1a7fd4'],[0.4,'#22b84a'],[0.6,'#F5C800'],[0.8,'#E8620A'],[1,'#C42020']],
+  sunset:     [[0,'#F5E800'],[0.35,'#F5A800'],[0.65,'#E8620A'],[1,'#C42020']],
+  ocean:      [[0,'#2ECFCF'],[0.4,'#1a7fd4'],[0.7,'#2244bb'],[1,'#1a0a6e']],
+  forest:     [[0,'#D4E800'],[0.35,'#4CC800'],[0.65,'#1aA870'],[1,'#0a6e6e']],
+  fire:       [[0,'#F5E020'],[0.3,'#F58000'],[0.6,'#C42020'],[1,'#6B0DAC']],
+  rose:       [[0,'#F5C800'],[0.35,'#E8608A'],[0.65,'#C820A8'],[1,'#7B0A88']],
+  mono_warm:  [[0,'#F5F0E0'],[0.5,'#C8A87A'],[1,'#5C3A1A']],
+  mono_cool:  [[0,'#FFFFFF'],[0.5,'#8899AA'],[1,'#1A2233']]
+};
+
+function makePaperGradient(key) {
+  const stops = paperGradients[key] || paperGradients.rainbow;
+  const grad = ctx.createLinearGradient(0, 0, W, H);
+  stops.forEach(([pos, col]) => grad.addColorStop(pos, col));
+  return grad;
+}
+
+function makeSvgGradientDef(key) {
+  const stops = paperGradients[key] || paperGradients.rainbow;
+  const stopStr = stops.map(([pos, col]) =>
+    `<stop offset="${(pos*100).toFixed(0)}%" stop-color="${col}"/>`
+  ).join('');
+  return `<defs><linearGradient id="pg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">${stopStr}</linearGradient></defs>`;
+}
+
+// ── Seed placement layouts ───────────────────────────────────────
+function generateSeeds(random) {
+  const layout  = document.getElementById('s_layout').value;
+  const requestedCount = Math.max(10, Math.min(maxCellsForArtArea(designWIn,designHIn),+document.getElementById('s_count').value));
+  const count = requestedCount;
+  // Keep the former default irregularity internally while removing a
+  // redundant user control; the wave controls now shape web thickness.
+  const jitter = 0.30;
+
+  seeds = [];
+  const pad = borderPx() + 4;
+
+  if (layout === 'random') {
+    for (let i = 0; i < count; i++) {
+      seeds.push([pad + random()*(W-pad*2), pad + random()*(H-pad*2)]);
+    }
+
+  } else if (layout === 'poisson') {
+    // Bridson-style Poisson disk sampling starts at the user-selected center
+    // and grows an evenly spaced field outward across the whole art area.
+    const centerX=pad+(W-pad*2)*(+document.getElementById('s_poisson_x').value/100);
+    const centerY=pad+(H-pad*2)*(+document.getElementById('s_poisson_y').value/100);
+    const minDist=Math.sqrt((W*H)/count)*0.7*(1-jitter*0.5);
+    const cellSize=minDist/Math.SQRT2;
+    const gridW=Math.ceil(W/cellSize),gridH=Math.ceil(H/cellSize);
+    const grid=new Array(gridW*gridH).fill(null),active=[];
+    const addPoint=(x,y)=>{
+      const point=[x,y];
+      seeds.push(point);active.push(point);
+      grid[Math.floor(y/cellSize)*gridW+Math.floor(x/cellSize)]=point;
+    };
+    addPoint(centerX,centerY);
+    while(active.length&&seeds.length<count) {
+      const activeIndex=Math.floor(random()*active.length),base=active[activeIndex];
+      let found=false;
+      for(let attempt=0;attempt<24;attempt++) {
+        const angle=random()*Math.PI*2;
+        const radius=minDist*(1+random());
+        const x=base[0]+Math.cos(angle)*radius,y=base[1]+Math.sin(angle)*radius;
+        if(x<pad||x>W-pad||y<pad||y>H-pad) continue;
+        const gx=Math.floor(x/cellSize),gy=Math.floor(y/cellSize);
+        let valid=true;
+        for(let dy=-2;dy<=2&&valid;dy++) for(let dx=-2;dx<=2&&valid;dx++) {
+          const nx=gx+dx,ny=gy+dy;
+          if(nx<0||nx>=gridW||ny<0||ny>=gridH) continue;
+          const neighbor=grid[ny*gridW+nx];
+          if(neighbor&&Math.hypot(x-neighbor[0],y-neighbor[1])<minDist) valid=false;
+        }
+        if(valid){addPoint(x,y);found=true;break;}
+      }
+      if(!found) active.splice(activeIndex,1);
+    }
+
+  } else if (layout === 'surface') {
+    // Start from random positions (so the Voronoi cells do not inherit a
+    // grid), then advect them through a smooth, randomized bump field.
+    const shortSide=Math.min(W,H), amp=shortSide*(0.025+0.20*jitter);
+    const phases=Array.from({length:4},()=>random()*Math.PI*2);
+    const bumps=Array.from({length:5},()=>{
+      const angle=random()*Math.PI*2, strength=amp*(0.45+random()*0.8);
+      return {x:pad+random()*(W-pad*2),y:pad+random()*(H-pad*2),
+        r:shortSide*(0.14+random()*0.16),dx:Math.cos(angle)*strength,dy:Math.sin(angle)*strength};
+    });
+    for(let i=0;i<count;i++) {
+      const x=pad+random()*(W-pad*2),y=pad+random()*(H-pad*2);
+      let dx=amp*(0.55*Math.sin(y/H*Math.PI*2+phases[0])+0.30*Math.sin((x+y)/(W+H)*Math.PI*4+phases[1]));
+      let dy=amp*(0.55*Math.cos(x/W*Math.PI*2+phases[2])+0.30*Math.sin((x-y)/(W+H)*Math.PI*4+phases[3]));
+      for(const b of bumps) {
+        const weight=Math.exp(-((x-b.x)**2+(y-b.y)**2)/(2*b.r*b.r));
+        dx+=b.dx*weight; dy+=b.dy*weight;
+      }
+      seeds.push([Math.max(pad,Math.min(W-pad,x+dx)),Math.max(pad,Math.min(H-pad,y+dy))]);
+    }
+
+  } else if (layout === 'bumps') {
+    // Keep a jittered scaffold across the whole art area so broad corridors
+    // never go empty. Spend the remaining points on compact radial groups
+    // centered on a loose grid; this creates rounded bumps throughout the
+    // field instead of letting random rejection sampling form one dense patch.
+    const baseCount=Math.max(8,Math.round(count*0.58));
+    const baseCols=Math.max(2,Math.round(Math.sqrt(baseCount*W/H)));
+    const baseRows=Math.ceil(baseCount/baseCols);
+    const baseStepX=(W-pad*2)/baseCols,baseStepY=(H-pad*2)/baseRows;
+    const scaffoldJitter=0.10+jitter*0.28;
+    for(let i=0;i<baseCount;i++) {
+      const col=i%baseCols,row=Math.floor(i/baseCols);
+      seeds.push([pad+(col+0.5)*baseStepX+(random()-0.5)*baseStepX*scaffoldJitter,
+        pad+(row+0.5)*baseStepY+(random()-0.5)*baseStepY*scaffoldJitter]);
+    }
+    const bumpCount=Math.max(4,Math.min(12,Math.round(Math.sqrt(count)/1.6)));
+    const bumpCols=Math.ceil(Math.sqrt(bumpCount*W/H));
+    const bumpRows=Math.ceil(bumpCount/bumpCols);
+    const bumpCenters=[];
+    for(let i=0;i<bumpCount;i++) {
+      const col=i%bumpCols,row=Math.floor(i/bumpCols);
+      const dx=(W-pad*2)/bumpCols,dy=(H-pad*2)/bumpRows;
+      bumpCenters.push([pad+(col+0.5)*dx+(random()-0.5)*dx*0.22,
+        pad+(row+0.5)*dy+(random()-0.5)*dy*0.22]);
+    }
+    const extra=count-seeds.length,perBump=Math.ceil(extra/bumpCount);
+    const radius=Math.min(W,H)*(0.10+0.035*jitter);
+    const phases=bumpCenters.map(()=>random()*Math.PI*2);
+    for(let i=0;i<extra;i++) {
+      const bump=i%bumpCount,layer=Math.floor(i/bumpCount);
+      const radial=radius*Math.sqrt((layer+0.5)/perBump)*(0.88+random()*0.24);
+      const angle=phases[bump]+layer*2.399963229728653;
+      const [cx,cy]=bumpCenters[bump];
+      seeds.push([Math.max(pad,Math.min(W-pad,cx+Math.cos(angle)*radial)),
+        Math.max(pad,Math.min(H-pad,cy+Math.sin(angle)*radial))]);
+    }
+
+  } else if (layout === 'curves') {
+    // Sample points along independent wandering ribbons, with a diffuse
+    // background so the whole field remains connected and irregular.
+    const curveCount=Math.max(2,Math.round(Math.sqrt(count)/3));
+    const alongCount=Math.round(count*0.68);
+    for(let k=0;k<alongCount;k++) {
+      const band=k%curveCount;
+      const t=random();
+      const horizontal=(band%2===0);
+      const bandCount=Math.ceil(curveCount/2);
+      const bandIndex=Math.floor(band/2);
+      const amp=Math.min(W,H)*(0.035+0.06*jitter);
+      const phase=random()*Math.PI*2;
+      const bend=Math.sin(t*Math.PI*2*(0.7+random()*0.7)+phase)*amp
+        +Math.sin(t*Math.PI*4+phase*1.7)*amp*0.35;
+      const spread=(random()-0.5)*Math.min(W,H)*(0.08+0.07*jitter);
+      let x,y;
+      if(horizontal) {
+        x=pad+t*(W-pad*2);
+        y=pad+(bandIndex+0.5)*(H-pad*2)/bandCount+bend+spread;
+      } else {
+        y=pad+t*(H-pad*2);
+        x=pad+(bandIndex+0.5)*(W-pad*2)/bandCount+bend+spread;
+      }
+      seeds.push([Math.max(pad,Math.min(W-pad,x)),Math.max(pad,Math.min(H-pad,y))]);
+    }
+    while(seeds.length<count) seeds.push([pad+random()*(W-pad*2),pad+random()*(H-pad*2)]);
+
+  } else if (layout === 'clusters') {
+    const numClusters = Math.max(3, Math.round(count / 18));
+    const clusterCenters = [];
+    for (let i = 0; i < numClusters; i++) {
+      clusterCenters.push([
+        pad + random()*(W-pad*2),
+        pad + random()*(H-pad*2)
+      ]);
+    }
+    const clusterRadius = Math.min(W,H) * (0.15 + jitter * 0.15);
+    const perCluster = Math.floor(count * 0.7 / numClusters);
+    for (const [cx, cy] of clusterCenters) {
+      for (let i = 0; i < perCluster; i++) {
+        const angle = random()*Math.PI*2;
+        const r = Math.pow(random(), 0.6) * clusterRadius;
+        const x = Math.max(pad, Math.min(W-pad, cx + Math.cos(angle)*r));
+        const y = Math.max(pad, Math.min(H-pad, cy + Math.sin(angle)*r));
+        seeds.push([x, y]);
+      }
+    }
+    const remaining = count - seeds.length;
+    for (let i = 0; i < remaining; i++) {
+      seeds.push([pad + random()*(W-pad*2), pad + random()*(H-pad*2)]);
+    }
+
+  }
+}
+
+// Remap seed positions along a chosen axis to create a directional density
+// gradient while retaining each layout's cross-axis structure. The slider
+// direction points toward increasing density (smaller cells).
+function applySeedDistribution() {
+  const contrast=Math.max(0,Math.min(0.8,+document.getElementById('s_seed_contrast').value/100||0));
+  if(contrast<=0||!seeds.length) return;
+  const angle=(+document.getElementById('s_seed_direction').value||0)*Math.PI/180;
+  const ux=Math.cos(angle),uy=Math.sin(angle),cx=W/2,cy=H/2;
+  const pad=borderPx()+4;
+  const extent=Math.max(1,Math.abs(ux)*(W/2-pad)+Math.abs(uy)*(H/2-pad));
+  for(let i=0;i<seeds.length;i++) {
+    const [x,y]=seeds[i];
+    const q=Math.max(0,Math.min(1,0.5+((x-cx)*ux+(y-cy)*uy)/(2*extent)));
+    const t=(Math.sqrt((1-contrast)**2+4*contrast*q)-(1-contrast))/(2*contrast);
+    const shift=(t-q)*2*extent;
+    seeds[i]=[Math.max(pad,Math.min(W-pad,x+shift*ux)),Math.max(pad,Math.min(H-pad,y+shift*uy))];
+  }
+}
+
+function polyArea(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x1,y1] = pts[i], [x2,y2] = pts[(i+1)%pts.length];
+    a += x1*y2 - x2*y1;
+  }
+  return Math.abs(a) / 2;
+}
+
+// Lloyd relaxation: repeatedly move each seed to its own cell's centroid
+// and recompute. This is the standard fix for slivers/needles in a
+// Voronoi diagram — it regularizes cell shapes at the source instead of
+// trying to round an inherently narrow angle after the fact, which has a
+// hard geometric floor (see roundCorners' comment). A couple of iterations
+// removes the worst slivers while still respecting the chosen layout.
+function lloydRelax(iterations) {
+  for (let iter = 0; iter < iterations; iter++) {
+    computeVoronoi();
+    for (let i = 0; i < seeds.length; i++) {
+      const p = polygons[i];
+      if (!p) continue;
+      let cx = 0, cy = 0, area = 0;
+      for (let j = 0; j < p.length; j++) {
+        const [x1,y1] = p[j], [x2,y2] = p[(j+1)%p.length];
+        const cross = x1*y2 - x2*y1;
+        area += cross; cx += (x1+x2)*cross; cy += (y1+y2)*cross;
+      }
+      area *= 0.5;
+      if (Math.abs(area) < 1e-6) continue;
+      seeds[i] = [cx/(6*area), cy/(6*area)];
+    }
+  }
+  computeVoronoi();
+}
+
+function computeVoronoi() {
+  if(!seeds.length) { polygons=[]; return; }
+  const delaunay = d3.Delaunay.from(seeds);
+  const b = borderPx();
+  const voronoi  = delaunay.voronoi([b, b, W-b, H-b]);
+  // A degenerate sliver (clipped right at a canvas corner, or an acute
+  // Voronoi vertex) can't be smoothed into a round shape — chaikin only
+  // cuts a fixed fraction of each edge, and a sliver's edges are already
+  // near zero, so the point never resolves no matter the iteration count.
+  // Drop only those, by area, rather than every edge-touching cell.
+  const avgArea = (W * H) / seeds.length;
+  // Keep small cells. Cleanup repairs their seed placement and rounds their
+  // cut geometry; it must not silently discard requested openings.
+  const minArea = 0;
+  polygons = seeds.map((_, i) => {
+    const p = voronoi.cellPolygon(i);
+    if (!p) return null;
+    const pts = p.slice(0, -1);
+    return polyArea(pts) < minArea ? null : pts;
+  });
+}
+
+// Repair sliver-prone cells by reusing their seeds to divide larger cells.
+// Keep the requested seed count fixed: cleanup must not discard openings.
+function repairSliverSeeds(targetCount=seeds.length) {
+  const target=Math.max(10,targetCount||seeds.length);
+  computeVoronoi();
+  for(let repair=0;repair<target;repair++) {
+    computeVoronoi();
+    const badIndex=polygons.findIndex((poly,i)=>poly&&!cutoutCellIsValid(i));
+    if(badIndex<0) break;
+    const saved=seeds.splice(badIndex,1)[0];
+    computeVoronoi();
+    const candidates=polygons.map((poly,i)=>{
+      if(!poly||poly.length<3) return null;
+      const cut=safeCellShape(i,SIZE_GRADIENT,OPENING_PACKING,CORNER_ROUNDNESS);
+      if(!cut) return null;
+      const [sx,sy]=seeds[i];
+      return {i,poly,openArea:polyArea(poly)-polyArea(cut),distance:(sx-saved[0])**2+(sy-saved[1])**2};
+    }).filter(Boolean).sort((a,b)=>a.distance-b.distance||b.openArea-a.openArea);
+    let repaired=false;
+    for(const candidate of candidates.slice(0,12)) {
+      const [sx,sy]=seeds[candidate.i];
+      const center=[candidate.poly.reduce((sum,p)=>sum+p[0],0)/candidate.poly.length,
+                    candidate.poly.reduce((sum,p)=>sum+p[1],0)/candidate.poly.length];
+      // Return the removed site near its former location, but nudge it toward
+      // the roomier center of the receiving cell. This splits the local
+      // sliver region into compact neighboring openings instead of moving a
+      // seed to an unrelated, globally largest cell or aiming at a vertex.
+      for(const fraction of [0.25,0.4,0.55,0.7,0.85,1]) {
+        const newIndex=seeds.length;
+        seeds.push([saved[0]+(center[0]-saved[0])*fraction,saved[1]+(center[1]-saved[1])*fraction]);
+        computeVoronoi();
+        const delaunay=d3.Delaunay.from(seeds);
+        const affected=[newIndex,...delaunay.neighbors(newIndex)];
+        if(affected.every(cutoutCellIsValid)){repaired=true;break;}
+        seeds.pop();
+        computeVoronoi();
+      }
+      if(repaired) break;
+    }
+    if(!repaired) {
+      // Keep the seed rather than reducing the user's requested count.
+      seeds.splice(Math.min(badIndex,seeds.length),0,saved);
+      computeVoronoi();
+      break;
+    }
+  }
+  computeVoronoi();
+  // If the caller requests more than the initial layout contains, fill the
+  // largest remaining web spaces incrementally, checking each local split.
+  for(let attempt=0;attempt<target&&seeds.length<target;attempt++) {
+    computeVoronoi();
+    if(seeds.length>=target) break;
+    if(seeds.length<3) break;
+    computeVoronoi();
+    const candidates=polygons.map((poly,i)=>{
+      if(!poly) return null;
+      const cut=safeCellShape(i,SIZE_GRADIENT,OPENING_PACKING,CORNER_ROUNDNESS);
+      if(!cut) return null;
+      // Rank cells by the amount of material left around their opening.
+      return {i,poly,unfilled:Math.max(0,polyArea(poly)-polyArea(cut))};
+    }).filter(Boolean).sort((a,b)=>b.unfilled-a.unfilled);
+    let accepted=false;
+    // Try the largest residual webs first. Each candidate is placed inside
+    // its current Voronoi cell, so the structural border is never filled.
+    for(const candidate of candidates.slice(0,8)) {
+      const [sx,sy]=seeds[candidate.i];
+      const center=[candidate.poly.reduce((sum,p)=>sum+p[0],0)/candidate.poly.length,
+                    candidate.poly.reduce((sum,p)=>sum+p[1],0)/candidate.poly.length];
+      // Split toward the cell's interior rather than toward a far vertex;
+      // this favors two compact, rounded openings over a pointed wedge.
+      for(const fraction of [0.3,0.45,0.6]) {
+        const newIndex=seeds.length;
+        seeds.push([sx+(center[0]-sx)*fraction,sy+(center[1]-sy)*fraction]);
+        computeVoronoi();
+        const delaunay=d3.Delaunay.from(seeds);
+        const affected=[newIndex,...delaunay.neighbors(newIndex)];
+        const valid=affected.every(cutoutCellIsValid);
+        if(valid){accepted=true;break;}
+        seeds.pop();
+        computeVoronoi();
+      }
+      if(accepted) break;
+    }
+    // Stop rather than force a cut where every trial would make a fragile
+    // shape. Existing requested seeds are retained regardless.
+    if(!accepted) break;
+  }
+  computeVoronoi();
+}
+
+// ── Polygon operations ───────────────────────────────────────────
+function shrinkPoly(pts, factor) {
+  const cx = pts.reduce((s,p)=>s+p[0],0)/pts.length;
+  const cy = pts.reduce((s,p)=>s+p[1],0)/pts.length;
+  return pts.map(([x,y])=>[cx+(x-cx)*factor, cy+(y-cy)*factor]);
+}
+
+// Corner fillet: target-radius based, not a flat edge fraction. A flat
+// fraction (the previous version) caps every corner's cut at the same
+// percentage of its edges regardless of angle — but the same cut fraction
+// produces a much smaller VISUAL radius on an acute corner than an obtuse
+// one, which is why sharp Voronoi vertices (3 cells meeting at a narrow
+// angle) still looked pointed even at max roundness. Instead: each vertex
+// requests a tangent length d = R / tan(angle/2) for a shared target
+// radius R — acute angles legitimately need more edge length for the same
+// visual roundness. Where two corners' requests exceed their shared edge,
+// scale both down proportionally, which naturally lets an acute corner
+// claim most of an edge from a neighbor that barely needed its share.
+function angleAt(prev, cur, next) {
+  const v1x = prev[0]-cur[0], v1y = prev[1]-cur[1];
+  const v2x = next[0]-cur[0], v2y = next[1]-cur[1];
+  const dot = v1x*v2x + v1y*v2y;
+  const cross = v1x*v2y - v1y*v2x;
+  return Math.atan2(Math.abs(cross), dot);
+}
+
+// Weld near-zero-length edges before rounding. Lloyd relaxation pushes
+// seeds toward even spacing, which occasionally makes 4+ points nearly
+// cocircular — two Voronoi vertices end up almost coincident, joined by a
+// near-zero edge, and read visually as an X/star junction rather than a
+// normal rounded corner. Merging that tiny edge's endpoints into one
+// vertex before roundCorners runs turns it back into a single ordinary
+// corner instead of two corners with no room between them.
+function weldShortEdges(pts, threshold = 0.08) {
+  if (pts.length <= 3) return pts;
+  const out = pts.map(([x,y])=>[x,y]);
+  const minPhysicalEdge = 0.5 * PPI / 25.4;
+  // Merge one edge at a time and recalculate: a single alternating pass can
+  // leave a second tiny edge behind, which later appears as a dot at a tip.
+  for (let pass=0;pass<pts.length-3 && out.length>3;pass++) {
+    let perimeter=0;
+    for(let i=0;i<out.length;i++) perimeter+=Math.hypot(out[(i+1)%out.length][0]-out[i][0],out[(i+1)%out.length][1]-out[i][1]);
+    const minLen=Math.max((perimeter/out.length)*threshold,minPhysicalEdge);
+    let merged=false;
+    for(let i=0;i<out.length;i++) {
+      const j=(i+1)%out.length,a=out[i],b=out[j];
+      if(Math.hypot(b[0]-a[0],b[1]-a[1])>=minLen) continue;
+      const mid=[(a[0]+b[0])/2,(a[1]+b[1])/2];
+      if(j===0){out[0]=mid;out.pop();}
+      else {out[i]=mid;out.splice(j,1);}
+      merged=true;
+      break;
+    }
+    if(!merged) break;
+  }
+  return out.length >= 3 ? out : pts;
+}
+
+function roundCorners(pts, roundness, segs = 12) {
+  if(roundness<=0) return pts;
+  const n=pts.length;
+  // A fixed edge-relative support keeps small corners round instead of
+  // allowing a target-radius budget to collapse their curve to a point.
+  const edgeFraction=Math.min(0.42,roundness*0.21);
+  const out=[];
+  for(let i=0;i<n;i++) {
+    const prev=pts[(i-1+n)%n],cur=pts[i],next=pts[(i+1)%n];
+    const prevLen=Math.hypot(cur[0]-prev[0],cur[1]-prev[1]);
+    const nextLen=Math.hypot(next[0]-cur[0],next[1]-cur[1]);
+    if(prevLen<1e-9||nextLen<1e-9) continue;
+    const d=edgeFraction*Math.min(prevLen,nextLen);
+    const p0=[cur[0]+(prev[0]-cur[0])*(d/prevLen),cur[1]+(prev[1]-cur[1])*(d/prevLen)];
+    const p2=[cur[0]+(next[0]-cur[0])*(d/nextLen),cur[1]+(next[1]-cur[1])*(d/nextLen)];
+    const theta=angleAt(prev,cur,next);
+    // Keep a curve on acute corners, but pull its control point toward the
+    // p0-p2 chord so it rounds the tip instead of chasing the original point.
+    const blend=theta<Math.PI/3?0.82:
+      theta<Math.PI/2?0.82+0.18*(theta-Math.PI/3)/(Math.PI/6):1;
+    const mid=[(p0[0]+p2[0])/2,(p0[1]+p2[1])/2];
+    const ctrl=[mid[0]+(cur[0]-mid[0])*blend,mid[1]+(cur[1]-mid[1])*blend];
+    for(let j=0;j<=segs;j++) {
+      const t=j/segs,u=1-t;
+      out.push([u*u*p0[0]+2*u*t*ctrl[0]+t*t*p2[0],u*u*p0[1]+2*u*t*ctrl[1]+t*t*p2[1]]);
+    }
+  }
+  return out.length>=3?out:pts;
+}
+
+function drawPoly(pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+}
+
+function polyToSvgD(pts) {
+  let d = `M${pts[0][0].toFixed(4)},${pts[0][1].toFixed(4)}`;
+  for (let i = 1; i < pts.length; i++) d += `L${pts[i][0].toFixed(4)},${pts[i][1].toFixed(4)}`;
+  return d + 'Z';
+}
+
+// ── Compute a physical inset from size gradient + packing ─────────
+// Gradient adds a position-dependent inset even at maximum packing, so its
+// effect remains visible. Packing removes only the extra inset; the fixed
+// The fabricator's 1.5 mm minimum web is always retained.
+function cellInsetMm(sx, sy, gradient, packBias) {
+  const t = Math.sqrt((sx-W/2)**2+(sy-H/2)**2) / Math.sqrt((W/2)**2+(H/2)**2);
+  const packInset=(1-packBias)*1.5;
+  const gradientInset=gradient*2.5*Math.pow(Math.min(1,t),1.4);
+  return packInset+gradientInset;
+}
+
+// Keep every closed opening measurably inside its own convex Voronoi cell.
+// Offset each convex cell inward by a true distance, so neighboring cuts
+// preserve the specified material web instead of scaling by cell size.
+function insetConvexPolygon(pts,distance) {
+  if(!pts||pts.length<3) return null;
+  let twiceArea=0;
+  for(let i=0;i<pts.length;i++) {
+    const a=pts[i],b=pts[(i+1)%pts.length];
+    twiceArea+=a[0]*b[1]-b[0]*a[1];
+  }
+  const orient=twiceArea>=0?1:-1;
+  const constraints=[];
+  for(let i=0;i<pts.length;i++) {
+    const a=pts[i],b=pts[(i+1)%pts.length],dx=b[0]-a[0],dy=b[1]-a[1];
+    const len=Math.hypot(dx,dy);
+    if(len<1e-9) return null;
+    const nx=orient>0?-dy/len:dy/len,ny=orient>0?dx/len:-dx/len;
+    const edgeDistance=Array.isArray(distance)?distance[i]:distance;
+    constraints.push({nx,ny,limit:nx*a[0]+ny*a[1]+edgeDistance});
+  }
+  // Clip against every shifted edge half-plane. Intersecting only adjacent
+  // offset lines fails when an acute/short edge disappears during inset; it
+  // can produce a vertex inside the original cell but closer than `distance`.
+  let result=pts.map(([x,y])=>[x,y]);
+  for(const {nx,ny,limit} of constraints) {
+    if(!result.length) return null;
+    const clipped=[];
+    for(let i=0;i<result.length;i++) {
+      const a=result[i],b=result[(i+1)%result.length];
+      const da=nx*a[0]+ny*a[1]-limit,db=nx*b[0]+ny*b[1]-limit;
+      const insideA=da>=-1e-9,insideB=db>=-1e-9;
+      if(insideA&&insideB) clipped.push(b);
+      else if(insideA!==insideB) {
+        const t=da/(da-db),crossing=[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t];
+        clipped.push(crossing);
+        if(!insideA&&insideB) clipped.push(b);
+      }
+    }
+    result=[];
+    for(const p of clipped) {
+      const prev=result[result.length-1];
+      if(!prev||Math.hypot(p[0]-prev[0],p[1]-prev[1])>1e-7) result.push(p);
+    }
+    if(result.length>1&&Math.hypot(result[0][0]-result[result.length-1][0],result[0][1]-result[result.length-1][1])<=1e-7) result.pop();
+    if(result.length<3) return null;
+  }
+  return result.every(p=>Number.isFinite(p[0])&&Number.isFinite(p[1]))?result:null;
+}
+
+// The same physical inset geometry is used by both previews and SVG export.
+function safeCellShape(i, gradient, packBias, roundness) {
+  const pts = polygons[i];
+  if (!pts || pts.length < 3) return null;
+  const [sx, sy] = seeds[i];
+  const cx = pts.reduce((sum, p) => sum + p[0], 0) / pts.length;
+  const cy = pts.reduce((sum, p) => sum + p[1], 0) / pts.length;
+  let minInsetRadius = Infinity;
+  for (let j = 0; j < pts.length; j++) {
+    const a = pts[j], b = pts[(j + 1) % pts.length];
+    const edgeLength = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (edgeLength < 1e-9) continue;
+    const distance = Math.abs((b[0]-a[0])*(cy-a[1]) - (b[1]-a[1])*(cx-a[0])) / edgeLength;
+    minInsetRadius = Math.min(minInsetRadius, distance);
+  }
+  const clearance = MIN_CUT_INSET_PER_SIDE_MM * PPI / 25.4;
+  const styleInset=cellInsetMm(sx,sy,gradient,packBias)*PPI/25.4;
+  const insetDistance=clearance+styleInset;
+  if (!Number.isFinite(minInsetRadius) || minInsetRadius <= insetDistance) return null;
+  // Merge near-zero Voronoi edges before constructing offset normals. If they
+  // are welded only after offsetting, unstable normals can leave a cut path
+  // closer than the requested clearance and create endpoint specks.
+  const cleanCell=weldShortEdges(pts);
+  if(cleanCell.length<3) return null;
+  const waveMode=document.getElementById('s_web_mode').value;
+  const waveAmplitude=Math.max(0,+document.getElementById('s_web_amplitude').value||0);
+  const waveCycles=Math.max(0,+document.getElementById('s_wave_count').value||0);
+  const artW=designWIn*PPI,artH=designHIn*PPI;
+  const artLeft=(W-artW)/2,artTop=(H-artH)/2;
+  const radialMax=Math.hypot(artW/2,artH/2)||1;
+  // Each edge gets its own nonnegative addition to the guaranteed inset.
+  // Shared edges use the same field value, keeping the mesh continuous.
+  const edgeAdditions=cleanCell.map((a,j)=>{
+    const b=cleanCell[(j+1)%cleanCell.length];
+    const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;
+    let wave=0;
+    if(waveCycles>0&&waveMode==='radial') {
+      const radius=Math.hypot(mx-W/2,my-H/2)/radialMax;
+      wave=Math.sin(2*Math.PI*waveCycles*radius);
+    } else if(waveCycles>0&&waveMode==='linear') {
+      const position=artW>0?(mx-artLeft)/artW:0.5;
+      wave=Math.sin(2*Math.PI*waveCycles*position);
+    }
+    // Shift the wave to [0,1]; negative lobes can never undercut the
+    // fabricator's 0.75 mm per-side minimum clearance.
+    return waveMode==='off'||waveCycles===0?0:waveAmplitude*(0.5+0.5*wave)*PPI/25.4;
+  });
+  const minOpeningArea=Math.pow(MIN_OPENING_WIDTH_MM*PPI/25.4,2);
+  const shapeAtScale=scale=>{
+    const edgeInsets=edgeAdditions.map(extra=>insetDistance+extra*scale);
+    const inset=insetConvexPolygon(cleanCell,edgeInsets);
+    if(!inset) return null;
+    const rounded=roundCorners(weldShortEdges(inset),roundness);
+    return rounded&&rounded.length>=3?rounded:null;
+  };
+  const isLargeEnough=shape=>shape&&polyArea(shape)>=minOpeningArea;
+  let rounded=shapeAtScale(1);
+  if(isLargeEnough(rounded)) return rounded;
+  // If the full wave would shrink an opening below the 6 mm usable size,
+  // reduce only this cell's wave strength until it fits. The base inset is
+  // never scaled, so every side still retains the required minimum web.
+  let low=0,high=1,best=shapeAtScale(0);
+  if(!isLargeEnough(best)) return null;
+  for(let pass=0;pass<12;pass++) {
+    const mid=(low+high)/2,candidate=shapeAtScale(mid);
+    if(isLargeEnough(candidate)){low=mid;best=candidate;} else high=mid;
+  }
+  return best;
+}
+
+// One acceptance rule for initial cells and local-fill candidates. It checks
+// the actual exported cut path plus the cell geometry that determines the
+// material junctions around it.
+function cutoutCellIsValid(i) {
+  const poly=polygons[i];
+  const cut=safeCellShape(i,SIZE_GRADIENT,OPENING_PACKING,CORNER_ROUNDNESS);
+  if(!poly||poly.length<3||!cut||cut.length<3) return false;
+  // Validate the actual rounded, inset opening. Raw Voronoi corners may be
+  // acute, but rejecting a whole cell for that corner was what dropped cells;
+  // roundCorners and the physical inset control the exported cut geometry.
+  return true;
+}
+
+// ── Generate & draw ──────────────────────────────────────────────
+function generate() {
+  prepareLayout();
+  designs=[];
+  const pieceCount=Math.min(packPositions.length,80);
+  for(let n=0;n<pieceCount;n++) {
+    const panelSeed=(MASTER_PATTERN_SEED+Math.imul(n+1,0x9E3779B9))>>>0;
+    const requestedCount=Math.max(10,Math.min(maxCellsForArtArea(designWIn,designHIn),+document.getElementById('s_count').value));
+    if(manualSeedOverrides.has(n)) {
+      seeds=manualSeedOverrides.get(n).map(([x,y])=>[x,y]);
+      computeVoronoi();
+    } else {
+      generateSeeds(makeSeededRandom(panelSeed));
+      applySeedDistribution();
+      const layoutType=document.getElementById('s_layout').value;
+      // Keep each layout's original character: relaxation is intentionally
+      // modest (or off) for forms based on clusters, curves, and Poisson sites.
+      const relaxPasses={random:2,surface:1,bumps:0,poisson:0,curves:2,clusters:1}[layoutType]??1;
+      lloydRelax(relaxPasses);
+      repairSliverSeeds(requestedCount);
+    }
+    const finalSeeds=seeds.map(([x,y])=>[x,y]);
+    const finalPolygons=polygons.map(p=>p?p.map(([x,y])=>[x,y]):null);
+    const finalCutouts=finalPolygons.map((_,i)=>{
+      const shape=safeCellShape(i,SIZE_GRADIENT,OPENING_PACKING,CORNER_ROUNDNESS);
+      return shape?shape.map(([x,y])=>[x,y]):null;
+    });
+    designs.push({seed:panelSeed,seeds:finalSeeds,polygons:finalPolygons,cutouts:finalCutouts});
+  }
+  if(designs.length){ seeds=designs[0].seeds; polygons=designs[0].polygons; }
+  const slider=document.getElementById('s_count');
+  const requestedCount=+slider.value;
+  const panelCounts=designs.map(design=>design.cutouts.filter(Boolean).length);
+  const minimumPanelCount=panelCounts.length?Math.min(...panelCounts):Infinity;
+  const maximumPanelCount=panelCounts.length?Math.max(...panelCounts):0;
+  document.getElementById('actual_count').textContent=!Number.isFinite(minimumPanelCount)
+    ? 'Actual cut openings unavailable.'
+    : minimumPanelCount===maximumPanelCount
+      ? `Actual cut openings: ${minimumPanelCount} per panel (${requestedCount} requested).`
+      : `Actual cut openings: ${minimumPanelCount}–${maximumPanelCount} per panel (${requestedCount} requested).`;
+  const minutes=estimateLaserMinutes();
+  document.getElementById('cost_info').textContent=minutes===null
+    ? 'Estimated laser time unavailable for this layout.'
+    : smallBedFits(panelWIn,panelHIn)
+      ? `Estimated laser cutting time: ~${minutes} min · estimated machine cost at $150/hour: $${(minutes*150/60).toFixed(2)}.`
+      : `Estimated laser cutting time: ~${minutes} min · large-format machine price not estimated.`;
+  draw();
+}
+
+// Estimate active cutting time from the actual closed vectors in the layout.
+// Includes a conservative travel allowance and time for repeated short cuts;
+// it is approximate because actual speed depends on the fabricator's settings.
+function estimateLaserMinutes() {
+  if(!designs.length || !PPI) return null;
+  const mmPerPixel=25.4/PPI;
+  let lengthMm=0, pathCount=0;
+  const addPolyline=pts=>{
+    if(!pts || pts.length<2) return;
+    for(let i=0;i<pts.length;i++) {
+      const a=pts[i],b=pts[(i+1)%pts.length];
+      lengthMm+=Math.hypot(b[0]-a[0],b[1]-a[1])*mmPerPixel;
+    }
+    pathCount++;
+  };
+  for(const design of designs) {
+    lengthMm+=2*(panelWIn+panelHIn)*25.4; pathCount++;
+    lengthMm+=4*Math.PI*GUIDE_HOLE_DIAMETER_IN*25.4; pathCount+=4;
+    for(const cutout of design.cutouts) addPolyline(cutout);
+  }
+  const seconds=lengthMm/18+pathCount*0.35+45;
+  return Math.max(1,Math.ceil(seconds/60));
+}
+
+function drawGuideHoles(lineMode) {
+  const offset=GUIDE_HOLE_OFFSET_IN*PPI;
+  const radius=(GUIDE_HOLE_DIAMETER_IN/2)*PPI;
+  const centers=[[offset,offset],[panelWIn*PPI-offset,offset],
+    [offset,panelHIn*PPI-offset],[panelWIn*PPI-offset,panelHIn*PPI-offset]];
+  ctx.beginPath();
+  for(const [x,y] of centers) {
+    ctx.moveTo(x+radius,y);
+    ctx.arc(x,y,radius,0,Math.PI*2);
+  }
+  if(lineMode) { ctx.strokeStyle='#111'; ctx.lineWidth=0.025*PPI/25.4; ctx.stroke(); }
+  else { ctx.fillStyle='#000'; ctx.fill(); }
+}
+
+function draw() {
+  const paperKey = 'rainbow';
+  const cellColor = cellFills.black;
+  const lineMode = document.getElementById('s_preview').value === 'line';
+  ctx.clearRect(0,0,sheetW,sheetH);
+  ctx.fillStyle = lineMode ? '#fff' : '#f6f6f4'; ctx.fillRect(0,0,sheetW,sheetH);
+  for(let n=0;n<designs.length;n++) {
+    const design=designs[n];
+    const pos=packPositions[n];
+    ctx.save();
+    if(pos.rotated) { ctx.translate((pos.x+panelHIn)*PPI,pos.y*PPI); ctx.rotate(Math.PI/2); }
+    else ctx.translate(pos.x*PPI,pos.y*PPI);
+    if(lineMode) {
+      ctx.strokeStyle='#111'; ctx.lineWidth=0.025*PPI/25.4;
+      ctx.strokeRect(0,0,panelWIn*PPI,panelHIn*PPI);
+      ctx.save(); ctx.translate(artXIn*PPI,artYIn*PPI);
+      for(const shape of design.cutouts) {
+        if(!shape) continue; drawPoly(shape); ctx.stroke();
+      }
+      ctx.restore();
+    } else {
+      const stops=paperGradients[paperKey]||paperGradients.rainbow;
+      const panelGradient=ctx.createLinearGradient(0,0,panelWIn*PPI,panelHIn*PPI);
+      stops.forEach(([pos,color])=>panelGradient.addColorStop(pos,color));
+      ctx.fillStyle=panelGradient; ctx.fillRect(0,0,panelWIn*PPI,panelHIn*PPI);
+      ctx.save(); ctx.translate(artXIn*PPI,artYIn*PPI);
+      for(let i=0;i<design.cutouts.length;i++) {
+        const shape=design.cutouts[i];
+        if(!shape) continue;
+        const fill=cellColor(design.seeds[i][0],design.seeds[i][1]);
+        if(fill){drawPoly(shape);ctx.fillStyle=fill;ctx.fill();}
+      }
+      ctx.restore();
+    }
+    const manualMode=document.getElementById('s_manual_mode').value;
+    if(manualMode!=='off'&&n===activeManualPanel) {
+      ctx.save();ctx.translate(artXIn*PPI,artYIn*PPI);
+      const markerRadius=7*sheetW/Math.max(1,canvas.clientWidth||sheetW);
+      for(const [sx,sy] of design.seeds) {
+        ctx.beginPath();ctx.arc(sx,sy,markerRadius,0,Math.PI*2);
+        ctx.fillStyle='#F5C800';ctx.fill();ctx.strokeStyle='#222';ctx.lineWidth=Math.max(1,markerRadius*0.22);ctx.stroke();
+      }
+      ctx.restore();
+    }
+    drawGuideHoles(lineMode);
+    if(manualMode!=='off') {
+      ctx.strokeStyle=n===activeManualPanel?'#F5C800':'rgba(245,200,0,.35)';
+      ctx.lineWidth=(n===activeManualPanel?1.5:0.75)*PPI/25.4;
+      ctx.strokeRect(0,0,panelWIn*PPI,panelHIn*PPI);
+    }
+    ctx.restore();
+  }
+}
+
+function buildSvg(blackPreview=false) {
+  let paths='';
+  // Edge-to-edge panels share their cut edges. Draw the outside perimeter
+  // once, then each internal divider once rather than outlining every panel.
+  const x0=(packPositions[0]?.x||0)*PPI, y0=(packPositions[0]?.y||0)*PPI;
+  const gridW=packedLayout.cols*panelWIn*PPI, gridH=packedLayout.rows*panelHIn*PPI;
+  const x1=x0+gridW, y1=y0+gridH;
+  if(packedLayout.count) {
+    paths+=`<path d="M${x0},${y0}H${x1}V${y1}H${x0}Z" fill="none" stroke="#FF0000" stroke-width="0.025mm"/>`;
+    for(let col=1;col<packedLayout.cols;col++) {
+      const x=x0+col*panelWIn*PPI;
+      paths+=`<path d="M${x},${y0}V${y1}" fill="none" stroke="#FF0000" stroke-width="0.025mm"/>`;
+    }
+    for(let row=1;row<packedLayout.rows;row++) {
+      const y=y0+row*panelHIn*PPI;
+      paths+=`<path d="M${x0},${y}H${x1}" fill="none" stroke="#FF0000" stroke-width="0.025mm"/>`;
+    }
+  }
+  for(let n=0;n<designs.length;n++) {
+    const design=designs[n];
+    const pos=packPositions[n];
+    const x=pos.x*PPI, y=pos.y*PPI;
+    const transform=pos.rotated ? `translate(${(pos.x+panelHIn)*PPI} ${y}) rotate(90)` : `translate(${x} ${y})`;
+    let part='';
+    const guideR=(GUIDE_HOLE_DIAMETER_IN/2)*PPI,guideO=GUIDE_HOLE_OFFSET_IN*PPI;
+    const guideCenters=[[guideO,guideO],[panelWIn*PPI-guideO,guideO],
+      [guideO,panelHIn*PPI-guideO],[panelWIn*PPI-guideO,panelHIn*PPI-guideO]];
+    for(const [gx,gy] of guideCenters)
+      part+=`<circle cx="${gx}" cy="${gy}" r="${guideR}" fill="none" stroke="#FF0000" stroke-width="0.025mm"/>`;
+    part+=`<g transform="translate(${artXIn*PPI} ${artYIn*PPI})">`;
+    for(const shape of design.cutouts) {
+      if(shape){const d=polyToSvgD(shape);if(d)part+=`<path d="${d}" fill="none" stroke="#FF0000" stroke-width="0.025mm"/>`;}
+    }
+    part+='</g>';
+    paths+=`<g transform="${transform}">${part}</g>`;
+  }
+  const opening=openingDimensions();
+  const previewBackground=blackPreview?`<rect x="0" y="0" width="${sheetW}" height="${sheetH}" fill="#000000" data-view-only="not-for-cutting"/>`:'';
+  const previewWarning=blackPreview?' VIEW ONLY: the black background is not cut geometry. Do not send this preview file to the fabricator.':'';
+  const patternSeeds=designs.map(design=>design.seed).join(',');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${stockWIn}in" height="${stockHIn}in" viewBox="0 0 ${sheetW} ${sheetH}" data-reference-dimension="${stockWIn} x ${stockHIn} in" data-pattern-seeds="${patternSeeds}"><desc>${previewWarning} ${designs.length} cut panels for ${opening.w} x ${opening.h} inch visible art areas. Each whole panel measures ${panelWIn.toFixed(3)} x ${panelHIn.toFixed(3)} inches, with art centered at ${artXIn.toFixed(3)}, ${artYIn.toFixed(3)} inches inside each panel. Four ${GUIDE_HOLE_DIAMETER_IN} inch guide holes per panel have centers ${GUIDE_HOLE_OFFSET_IN} inch from the corners. Red geometry is cut; shared panel boundaries are included once. Fixed minimum web width: ${MIN_WEB_WIDTH_MM} mm.</desc>${previewBackground}${paths}</svg>`;
+}
+
+function copyManualOverrides(source=manualSeedOverrides) {
+  return new Map([...source].map(([index,list])=>[index,list.map(([x,y])=>[x,y])]));
+}
+function saveManualUndo() {
+  manualUndoStack.push({overrides:copyManualOverrides(),count:document.getElementById('s_count').value});
+  if(manualUndoStack.length>40) manualUndoStack.shift();
+  document.getElementById('btn_undo_seed').disabled=false;
+}
+function clearManualEdits() {
+  manualSeedOverrides.clear();
+  manualUndoStack=[];
+  document.getElementById('btn_undo_seed').disabled=true;
+  document.getElementById('manual_note').textContent='Changing size, layout, count, or density resets manual edits.';
+}
+function panelPointAt(clientX,clientY,index) {
+  const rect=canvas.getBoundingClientRect();
+  if(!rect.width||!rect.height||!packPositions[index]) return null;
+  const x=(clientX-rect.left)*sheetW/rect.width,y=(clientY-rect.top)*sheetH/rect.height;
+  const pos=packPositions[index];
+  if(pos.rotated) return {x:y-pos.y*PPI,y:(pos.x+panelHIn)*PPI-x};
+  return {x:x-pos.x*PPI,y:y-pos.y*PPI};
+}
+function panelAt(clientX,clientY) {
+  for(let i=0;i<packPositions.length&&i<designs.length;i++) {
+    const p=panelPointAt(clientX,clientY,i);
+    if(p&&p.x>=0&&p.y>=0&&p.x<panelWIn*PPI&&p.y<panelHIn*PPI) return {index:i,panel:p};
+  }
+  return null;
+}
+function artPointForPanel(panelPoint,clampToArt=false) {
+  let x=panelPoint.x-artXIn*PPI,y=panelPoint.y-artYIn*PPI;
+  if(clampToArt) {
+    const inset=borderPx()+4;
+    x=Math.max(inset,Math.min(W-inset,x));
+    y=Math.max(inset,Math.min(H-inset,y));
+  }
+  return {x,y};
+}
+function rebuildManualPanel(index,newSeeds) {
+  const previousSeeds=seeds,previousPolygons=polygons;
+  seeds=newSeeds.map(([x,y])=>[x,y]);
+  computeVoronoi();
+  const nextSeeds=seeds.map(([x,y])=>[x,y]);
+  const nextPolygons=polygons.map(p=>p?p.map(([x,y])=>[x,y]):null);
+  const nextCutouts=nextPolygons.map((_,i)=>{
+    const shape=safeCellShape(i,SIZE_GRADIENT,OPENING_PACKING,CORNER_ROUNDNESS);
+    return shape?shape.map(([x,y])=>[x,y]):null;
+  });
+  designs[index]={...designs[index],seeds:nextSeeds,polygons:nextPolygons,cutouts:nextCutouts};
+  manualSeedOverrides.set(index,nextSeeds);
+  seeds=previousSeeds;polygons=previousPolygons;
+  draw();
+}
+function nearestSeed(index,point,maxDistance) {
+  const list=designs[index]?.seeds||[];
+  let best=-1,bestDistance=maxDistance;
+  for(let i=0;i<list.length;i++) {
+    const d=Math.hypot(point.x-list[i][0],point.y-list[i][1]);
+    if(d<bestDistance){best=i;bestDistance=d;}
+  }
+  return best;
+}
+function pointInPolygon(point,poly) {
+  let inside=false;
+  for(let i=0,j=poly.length-1;i<poly.length;j=i++) {
+    const a=poly[i],b=poly[j];
+    if(((a[1]>point[1])!==(b[1]>point[1]))&&point[0]<(b[0]-a[0])*(point[1]-a[1])/(b[1]-a[1])+a[0]) inside=!inside;
+  }
+  return inside;
+}
+// A click may land too close to a junction to create a usable opening. Search
+// inside the clicked cell for a nearby split that leaves every affected cut
+// path valid, instead of silently accepting a seed whose cutout is cleaned up.
+function manualSplitPoint(index,newSeeds,desired) {
+  const previousSeeds=seeds,previousPolygons=polygons;
+  seeds=newSeeds.map(([x,y])=>[x,y]);computeVoronoi();
+  let host=polygons.findIndex(poly=>poly&&pointInPolygon(desired,poly));
+  if(host<0) host=polygons.reduce((best,poly,i)=>poly&&(!polygons[best]||polyArea(poly)>polyArea(polygons[best]))?i:best,-1);
+  const hostPoly=polygons[host];
+  if(!hostPoly) {seeds=previousSeeds;polygons=previousPolygons;return null;}
+  const bounds={minX:Math.min(...hostPoly.map(p=>p[0])),maxX:Math.max(...hostPoly.map(p=>p[0])),minY:Math.min(...hostPoly.map(p=>p[1])),maxY:Math.max(...hostPoly.map(p=>p[1]))};
+  const candidates=[desired];
+  // Evenly sample the host cell; sorting by distance keeps the split near the
+  // user's click while allowing enough room for the minimum opening size.
+  const grid=9;
+  for(let iy=1;iy<grid;iy++) for(let ix=1;ix<grid;ix++) {
+    const p=[bounds.minX+(bounds.maxX-bounds.minX)*ix/grid,bounds.minY+(bounds.maxY-bounds.minY)*iy/grid];
+    if(pointInPolygon(p,hostPoly)) candidates.push(p);
+  }
+  const center=[hostPoly.reduce((sum,p)=>sum+p[0],0)/hostPoly.length,hostPoly.reduce((sum,p)=>sum+p[1],0)/hostPoly.length];
+  candidates.push(center);
+  candidates.sort((a,b)=>Math.hypot(a[0]-desired[0],a[1]-desired[1])-Math.hypot(b[0]-desired[0],b[1]-desired[1]));
+  const baseSeeds=seeds.map(([x,y])=>[x,y]);
+  let accepted=null;
+  for(const candidate of candidates) {
+    seeds=baseSeeds.map(([x,y])=>[x,y]);
+    seeds.push(candidate);computeVoronoi();
+    const delaunay=d3.Delaunay.from(seeds),addedIndex=seeds.length-1;
+    const affected=[addedIndex,...delaunay.neighbors(addedIndex)];
+    if(affected.every(cutoutCellIsValid)) {accepted=[...candidate];break;}
+  }
+  seeds=previousSeeds;polygons=previousPolygons;
+  return accepted;
+}
+function commitManualSeeds(index,nextSeeds) {
+  rebuildManualPanel(index,nextSeeds);
+  generate();
+  document.getElementById('manual_note').textContent=`Panel ${index+1} updated. The change is included in the fabricator SVG.`;
+}
+function handleManualClick(event) {
+  const mode=document.getElementById('s_manual_mode').value;
+  if(mode!=='add'&&mode!=='remove') return;
+  const hit=panelAt(event.clientX,event.clientY);
+  if(!hit) return;
+  activeManualPanel=hit.index;
+  const list=designs[hit.index].seeds.map(([x,y])=>[x,y]);
+  const point=artPointForPanel(hit.panel);
+  if(mode==='add') {
+    const edge=borderPx()+4;
+    if(point.x<edge||point.y<edge||point.x>W-edge||point.y>H-edge) {
+      document.getElementById('manual_note').textContent='Add seeds inside the art area, clear of its structural border.';draw();return;
+    }
+    const maximum=maxCellsForArtArea(designWIn,designHIn);
+    if(list.length>=maximum) {
+      document.getElementById('manual_note').textContent=`This art area is at its current limit of ${maximum} seeds.`;draw();return;
+    }
+    const split=manualSplitPoint(hit.index,list,[point.x,point.y]);
+    if(!split) {
+      document.getElementById('manual_note').textContent='There is not enough room at that spot for another rounded opening. Try a larger open area.';draw();return;
+    }
+    saveManualUndo();list.push(split);
+    commitManualSeeds(hit.index,list);
+    if(Math.hypot(split[0]-point.x,split[1]-point.y)>1) document.getElementById('manual_note').textContent='Added the opening nearby, where it fits cleanly inside the clicked cell.';
+  } else {
+    const rect=canvas.getBoundingClientRect(),threshold=14*sheetW/rect.width;
+    const seedIndex=nearestSeed(hit.index,point,threshold);
+    if(seedIndex<0) {document.getElementById('manual_note').textContent='Click close to a seed to remove it.';draw();return;}
+    if(list.length<=10) {document.getElementById('manual_note').textContent='Keep at least 10 seeds in a panel.';draw();return;}
+    saveManualUndo();list.splice(seedIndex,1);commitManualSeeds(hit.index,list);
+  }
+}
+canvas.addEventListener('click',handleManualClick);
+canvas.addEventListener('pointerdown',event=>{
+  if(document.getElementById('s_manual_mode').value!=='move') return;
+  const hit=panelAt(event.clientX,event.clientY);
+  if(!hit) return;
+  activeManualPanel=hit.index;
+  const point=artPointForPanel(hit.panel),rect=canvas.getBoundingClientRect();
+  const seedIndex=nearestSeed(hit.index,point,14*sheetW/rect.width);
+  if(seedIndex<0) {draw();return;}
+  saveManualUndo();
+  activeSeedDrag={pointerId:event.pointerId,panelIndex:hit.index,seedIndex};
+  canvas.setPointerCapture?.(event.pointerId);
+  draw();
+});
+canvas.addEventListener('pointermove',event=>{
+  if(!activeSeedDrag||activeSeedDrag.pointerId!==event.pointerId) return;
+  const panelPoint=panelPointAt(event.clientX,event.clientY,activeSeedDrag.panelIndex);
+  if(!panelPoint) return;
+  const point=artPointForPanel(panelPoint,true);
+  const next=designs[activeSeedDrag.panelIndex].seeds.map(([x,y])=>[x,y]);
+  next[activeSeedDrag.seedIndex]=[point.x,point.y];
+  rebuildManualPanel(activeSeedDrag.panelIndex,next);
+});
+function finishSeedDrag(event) {
+  if(!activeSeedDrag||activeSeedDrag.pointerId!==event.pointerId) return;
+  activeSeedDrag=null;
+  generate();
+  document.getElementById('manual_note').textContent=`Panel ${activeManualPanel+1} updated. The change is included in the fabricator SVG.`;
+}
+canvas.addEventListener('pointerup',finishSeedDrag);
+canvas.addEventListener('pointercancel',finishSeedDrag);
+function undoManualSeedEdit() {
+  const state=manualUndoStack.pop();
+  if(!state) return;
+  manualSeedOverrides=state.overrides;
+  const slider=document.getElementById('s_count');
+  slider.value=state.count;document.getElementById('v_count').textContent=state.count;
+  document.getElementById('btn_undo_seed').disabled=manualUndoStack.length===0;
+  generate();
+  document.getElementById('manual_note').textContent=`Seed edit undone for panel ${activeManualPanel+1}.`;
+}
+
+// ── Wiring ───────────────────────────────────────────────────────
+document.getElementById('s_opening').onchange=()=>{
+  clearManualEdits();
+  const next=openingDimensions();
+  const nextArea=next.w*next.h;
+  const currentCount=+document.getElementById('s_count').value;
+  const density=currentCount/Math.max(1,densityAreaIn2);
+  const nextLimit=maxCellsForArtArea(next.w,next.h);
+  const slider=document.getElementById('s_count');
+  slider.max=nextLimit;
+  const scaledCount=Math.max(10,Math.min(nextLimit,Math.round(density*nextArea)));
+  slider.value=scaledCount;
+  document.getElementById('v_count').textContent=scaledCount;
+  densityAreaIn2=nextArea;
+  generate();
+};
+document.getElementById('s_preview').onchange=draw;
+document.getElementById('btn_svg').onclick=()=>{
+  const svg=buildSvg();
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+  a.download='voronoi-matted-art-sheet.svg';a.click();
+};
+document.getElementById('btn_svg_preview').onclick=()=>{
+  const svg=buildSvg(true);
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+  a.download='voronoi-web-generator-black-preview.svg';a.click();
+};
+document.getElementById('btn_dl').onclick=()=>{
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([document.documentElement.outerHTML],{type:'text/html'}));
+  a.download='voronoi-web-generator.html';a.click();
+};
+['s_count'].forEach(id=>{
+  const el=document.getElementById(id), key=id.split('_')[1];
+  el.oninput=()=>{clearManualEdits();document.getElementById('v_'+key).textContent=el.value;generate();};
+});
+document.getElementById('s_web_mode').onchange=generate;
+document.getElementById('s_web_amplitude').oninput=()=>{
+  document.getElementById('v_web_amplitude').textContent=`${(+document.getElementById('s_web_amplitude').value).toFixed(1)} mm`;
+  generate();
+};
+document.getElementById('s_wave_count').oninput=()=>{
+  document.getElementById('v_wave_count').textContent=document.getElementById('s_wave_count').value;
+  generate();
+};
+document.getElementById('s_seed_contrast').oninput=()=>{
+  clearManualEdits();
+  document.getElementById('v_seed_contrast').textContent=document.getElementById('s_seed_contrast').value+'%';
+  generate();
+};
+document.getElementById('s_seed_direction').oninput=()=>{
+  clearManualEdits();
+  const deg=+document.getElementById('s_seed_direction').value;
+  const arrows=['→','↘','↓','↙','←','↖','↑','↗','→'];
+  document.getElementById('v_seed_direction').textContent=`${deg}° ${arrows[Math.round(deg/45)]}`;
+  generate();
+};
+function updatePoissonCenterVisibility() {
+  const visible=document.getElementById('s_layout').value==='poisson';
+  document.getElementById('poisson_center_x_ctrl').hidden=!visible;
+  document.getElementById('poisson_center_y_ctrl').hidden=!visible;
+  document.getElementById('poisson_center_note').hidden=!visible;
+}
+['s_poisson_x','s_poisson_y'].forEach(id=>{
+  const el=document.getElementById(id),value=document.getElementById('v_'+id.slice(2));
+  el.oninput=()=>{
+    value.textContent=el.value+'%';
+    // These controls only change the Poisson sampler's starting point.
+    // Avoid regenerating unrelated randomized layouts when a value changes.
+    if(document.getElementById('s_layout').value==='poisson') {clearManualEdits();generate();}
+  };
+});
+document.getElementById('s_layout').onchange=()=>{clearManualEdits();updatePoissonCenterVisibility();generate();};
+document.getElementById('s_manual_mode').onchange=()=>{
+  activeSeedDrag=null;
+  canvas.style.cursor=document.getElementById('s_manual_mode').value==='move'?'grab':'crosshair';
+  document.getElementById('manual_note').textContent='Choose Add/Split and click an art area, drag a visible seed in Move mode, or click one in Remove mode. Edits apply to the selected panel and are included in the SVG. Changing size, layout, count, or density resets edits.';
+  draw();
+};
+document.getElementById('btn_undo_seed').onclick=undoManualSeedEdit;
+updatePoissonCenterVisibility();
+generate();
+</script>
+</body>
+</html>
