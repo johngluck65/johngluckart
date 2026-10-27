@@ -1,0 +1,127 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="John Gluck - Creative experiments and interactive art generators.">
+  <title>John Gluck | johngluck.art</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f7f6f2;
+      color: #292929;
+      line-height: 1.6;
+    }
+
+    header {
+      padding: 70px 24px 45px;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 3rem;
+      font-weight: 600;
+      letter-spacing: -2px;
+    }
+
+    header p {
+      color: #777;
+      font-size: 1.1rem;
+    }
+
+    main {
+      max-width: 850px;
+      margin: 0 auto;
+      padding: 20px 24px 80px;
+    }
+
+    h2 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 10px;
+    }
+
+    .generator-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-top: 22px;
+    }
+
+    .generator {
+      display: block;
+      padding: 24px;
+      background: white;
+      border: 1px solid #e5e3dd;
+      border-radius: 10px;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .generator:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 5px 18px rgba(0,0,0,0.08);
+    }
+
+    .generator h3 {
+      margin: 0 0 8px;
+      font-size: 1.2rem;
+    }
+
+    .generator p {
+      margin: 0;
+      color: #777;
+      font-size: 0.95rem;
+    }
+
+    footer {
+      text-align: center;
+      padding: 25px;
+      color: #999;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+
+<body>
+
+  <header>
+    <h1>John Gluck</h1>
+    <p>Art, experiments, and things I've made.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Generators</h2>
+
+      <div class="generator-list">
+
+        <a class="generator" href="neural-dynamics-generator-v1.html">
+          <h3>Neural Dynamics Generator V1</h3>
+          <p>Explore the first version of the neural dynamics generator.</p>
+        </a>
+
+        <a class="generator" href="neural-dynamics-generator-v2.html">
+          <h3>Neural Dynamics Generator V2</h3>
+          <p>Explore the latest version of the neural dynamics generator.</p>
+        </a>
+
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    © 2026 John Gluck
+  </footer>
+
+</body>
+</html>
+
