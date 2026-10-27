@@ -4,18 +4,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="John Gluck - Art, experiments, and creative tools.">
+  <meta name="description" content="John Gluck - Creative experiments and interactive art generators.">
   <title>John Gluck | johngluck.art</title>
 
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
-                   sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #f7f6f2;
       color: #292929;
       line-height: 1.6;
@@ -36,17 +33,12 @@
     header p {
       color: #777;
       font-size: 1.1rem;
-      margin-top: 8px;
     }
 
     main {
       max-width: 850px;
       margin: 0 auto;
       padding: 20px 24px 80px;
-    }
-
-    section {
-      margin-top: 35px;
     }
 
     h2 {
@@ -58,15 +50,15 @@
 
     .generator-list {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
       gap: 16px;
       margin-top: 22px;
     }
 
     .generator {
       display: block;
-      padding: 22px;
-      background: #fff;
+      padding: 24px;
+      background: white;
       border: 1px solid #e5e3dd;
       border-radius: 10px;
       text-decoration: none;
@@ -81,7 +73,7 @@
 
     .generator h3 {
       margin: 0 0 8px;
-      font-size: 1.15rem;
+      font-size: 1.2rem;
     }
 
     .generator p {
@@ -96,12 +88,6 @@
       color: #999;
       font-size: 0.85rem;
     }
-
-    @media (max-width: 600px) {
-      header h1 {
-        font-size: 2.3rem;
-      }
-    }
   </style>
 </head>
 
@@ -113,30 +99,23 @@
   </header>
 
   <main>
-
     <section>
       <h2>Generators</h2>
 
       <div class="generator-list">
 
-        <a class="generator" href="/generators/generator1.html">
-          <h3>Generator One</h3>
-          <p>Description of your first generator.</p>
+        <a class="generator" href="neural-dynamics-generator-v1.html">
+          <h3>Neural Dynamics Generator V1</h3>
+          <p>Explore the first version of the neural dynamics generator.</p>
         </a>
 
-        <a class="generator" href="/generators/generator2.html">
-          <h3>Generator Two</h3>
-          <p>Description of your second generator.</p>
-        </a>
-
-        <a class="generator" href="/generators/generator3.html">
-          <h3>Generator Three</h3>
-          <p>Description of your third generator.</p>
+        <a class="generator" href="neural-dynamics-generator-v2.html">
+          <h3>Neural Dynamics Generator V2</h3>
+          <p>Explore the latest version of the neural dynamics generator.</p>
         </a>
 
       </div>
     </section>
-
   </main>
 
   <footer>
